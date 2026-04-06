@@ -182,6 +182,39 @@ describe("StateManager", () => {
     });
   });
 
+  describe("readLogRange", () => {
+    beforeEach(async () => {
+      await state.init();
+    });
+
+    it("should read from offset to end", async () => {
+      await state.appendLog("test-a1b2", "line 1\nline 2\nline 3\n");
+      const result = await state.readLogRange("test-a1b2", 7);
+      expect(result.content).toBe("line 2\nline 3\n");
+      expect(result.newOffset).toBe(21);
+    });
+
+    it("should return empty content if offset is at end", async () => {
+      await state.appendLog("test-a1b2", "line 1\n");
+      const result = await state.readLogRange("test-a1b2", 7);
+      expect(result.content).toBe("");
+      expect(result.newOffset).toBe(7);
+    });
+
+    it("should read from 0 on first call", async () => {
+      await state.appendLog("test-a1b2", "hello\nworld\n");
+      const result = await state.readLogRange("test-a1b2", 0);
+      expect(result.content).toBe("hello\nworld\n");
+      expect(result.newOffset).toBe(12);
+    });
+
+    it("should return offset 0 for non-existent log", async () => {
+      const result = await state.readLogRange("nonexistent", 0);
+      expect(result.content).toBe("");
+      expect(result.newOffset).toBe(0);
+    });
+  });
+
   describe("reconcile", () => {
     beforeEach(async () => {
       await state.init();

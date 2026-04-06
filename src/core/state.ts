@@ -92,6 +92,27 @@ export class StateManager {
     }
   }
 
+  async readLogRange(id: string, offset: number): Promise<{ content: string; newOffset: number }> {
+    const filePath = path.join(this.agentsDir, `${id}.log`);
+    try {
+      const stat = await fs.stat(filePath);
+      const fileSize = stat.size;
+      if (offset >= fileSize) {
+        return { content: "", newOffset: offset };
+      }
+      const handle = await fs.open(filePath, "r");
+      try {
+        const buffer = Buffer.alloc(fileSize - offset);
+        await handle.read(buffer, 0, buffer.length, offset);
+        return { content: buffer.toString("utf-8"), newOffset: fileSize };
+      } finally {
+        await handle.close();
+      }
+    } catch {
+      return { content: "", newOffset: 0 };
+    }
+  }
+
   async saveLinks(links: Link[]): Promise<void> {
     await fs.writeFile(this.linksPath, JSON.stringify(links, null, 2));
   }
