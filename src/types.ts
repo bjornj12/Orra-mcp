@@ -15,8 +15,12 @@ export type LinkTrigger = z.infer<typeof LinkTrigger>;
 export const LinkStatus = z.enum(["pending", "fired", "expired"]);
 export type LinkStatus = z.infer<typeof LinkStatus>;
 
+export const AgentType = z.enum(["spawned", "external"]);
+export type AgentType = z.infer<typeof AgentType>;
+
 export const AgentStateSchema = z.object({
   id: z.string(),
+  type: AgentType.default("spawned"),
   task: z.string(),
   branch: z.string(),
   worktree: z.string(),
@@ -53,3 +57,47 @@ export const ConfigSchema = z.object({
   defaultAllowedTools: z.array(z.string()).nullable(),
 });
 export type Config = z.infer<typeof ConfigSchema>;
+
+// Socket protocol messages
+
+const RegisterMessage = z.object({
+  type: z.literal("register"),
+  task: z.string(),
+  branch: z.string().optional(),
+});
+
+const OutputMessage = z.object({
+  type: z.literal("output"),
+  data: z.string(),
+});
+
+const StatusMessage = z.object({
+  type: z.literal("status"),
+  status: z.enum(["completed", "failed"]),
+  exitCode: z.number(),
+});
+
+const RegisteredMessage = z.object({
+  type: z.literal("registered"),
+  agentId: z.string(),
+});
+
+const MessageMessage = z.object({
+  type: z.literal("message"),
+  content: z.string(),
+});
+
+const StopMessage = z.object({
+  type: z.literal("stop"),
+  reason: z.string(),
+});
+
+export const SocketMessageSchema = z.discriminatedUnion("type", [
+  RegisterMessage,
+  OutputMessage,
+  StatusMessage,
+  RegisteredMessage,
+  MessageMessage,
+  StopMessage,
+]);
+export type SocketMessage = z.infer<typeof SocketMessageSchema>;

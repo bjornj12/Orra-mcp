@@ -66,6 +66,7 @@ describe("StateManager", () => {
     it("should save and load agent state", async () => {
       const agent = {
         id: "test-a1b2",
+        type: "spawned" as const,
         task: "test task",
         branch: "orra/test-a1b2",
         worktree: "worktrees/test-a1b2",
