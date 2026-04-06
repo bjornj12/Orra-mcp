@@ -17,6 +17,7 @@ import { linkAgentsSchema, handleLinkAgents } from "./tools/link-agents.js";
 import { registerSchema, handleRegister } from "./tools/register.js";
 import { unregisterSchema, handleUnregister } from "./tools/unregister.js";
 import { heartbeatSchema, handleHeartbeat } from "./tools/heartbeat.js";
+import { handleInstallHooks } from "./tools/install-hooks.js";
 import type { OrraMode } from "./types.js";
 
 export function createServer(
@@ -39,6 +40,14 @@ export function createServer(
     const client = new SocketClient(projectRoot);
     registerAgentTools(server, client);
   }
+
+  // Available in both modes
+  server.tool(
+    "orra_install_hooks",
+    "Install Orra hooks into this project's .claude/settings.local.json for automatic input detection",
+    {},
+    async () => handleInstallHooks(),
+  );
 
   return { server, manager };
 }
