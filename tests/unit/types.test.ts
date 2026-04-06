@@ -4,17 +4,21 @@ import {
   LinkSchema,
   ConfigSchema,
   AgentStatus,
+  AgentType,
   LinkStatus,
   LinkTrigger,
+  SocketMessageSchema,
   type AgentState,
   type Link,
   type Config,
+  type SocketMessage,
 } from "../../src/types.js";
 
 describe("AgentStateSchema", () => {
   it("should validate a complete agent state", () => {
     const state: AgentState = {
       id: "auth-refactor-a1b2",
+      type: "spawned",
       task: "Refactor auth middleware",
       branch: "orra/auth-refactor-a1b2",
       worktree: "worktrees/auth-refactor-a1b2",
@@ -50,6 +54,7 @@ describe("AgentStateSchema", () => {
   it("should accept completed state with exit code", () => {
     const state = {
       id: "test-a1b2",
+      type: "spawned",
       task: "test task",
       branch: "orra/test-a1b2",
       worktree: "worktrees/test-a1b2",
@@ -122,5 +127,77 @@ describe("ConfigSchema", () => {
       defaultAllowedTools: ["Read", "Edit", "Bash"],
     };
     expect(ConfigSchema.parse(config)).toEqual(config);
+  });
+});
+
+describe("AgentType", () => {
+  it("should accept spawned", () => {
+    expect(AgentType.parse("spawned")).toBe("spawned");
+  });
+  it("should accept external", () => {
+    expect(AgentType.parse("external")).toBe("external");
+  });
+  it("should reject unknown type", () => {
+    expect(() => AgentType.parse("unknown")).toThrow();
+  });
+});
+
+describe("AgentStateSchema with type field", () => {
+  it("should validate spawned agent", () => {
+    const state = {
+      id: "test-a1b2", type: "spawned", task: "test", branch: "orra/test",
+      worktree: "worktrees/test", pid: 123, status: "running",
+      createdAt: "2026-04-06T14:30:00.000Z", updatedAt: "2026-04-06T14:30:00.000Z",
+      exitCode: null, model: null, allowedTools: null,
+    };
+    expect(AgentStateSchema.parse(state)).toEqual(state);
+  });
+
+  it("should validate external agent with pid 0", () => {
+    const state = {
+      id: "auth-a1b2", type: "external", task: "Working on auth", branch: "feat/auth",
+      worktree: "", pid: 0, status: "running",
+      createdAt: "2026-04-06T14:30:00.000Z", updatedAt: "2026-04-06T14:30:00.000Z",
+      exitCode: null, model: null, allowedTools: null,
+    };
+    expect(AgentStateSchema.parse(state)).toEqual(state);
+  });
+
+  it("should default type to spawned for backward compatibility", () => {
+    const state = {
+      id: "old-a1b2", task: "old task", branch: "orra/old",
+      worktree: "worktrees/old", pid: 123, status: "completed",
+      createdAt: "2026-04-06T14:30:00.000Z", updatedAt: "2026-04-06T14:30:00.000Z",
+      exitCode: 0, model: null, allowedTools: null,
+    };
+    const parsed = AgentStateSchema.parse(state);
+    expect(parsed.type).toBe("spawned");
+  });
+});
+
+describe("SocketMessageSchema", () => {
+  it("should validate register message", () => {
+    const msg = { type: "register", task: "auth refactor", branch: "feat/auth" };
+    expect(SocketMessageSchema.parse(msg).type).toBe("register");
+  });
+  it("should validate output message", () => {
+    const msg = { type: "output", data: "Reading file...\n" };
+    expect(SocketMessageSchema.parse(msg).type).toBe("output");
+  });
+  it("should validate status message", () => {
+    const msg = { type: "status", status: "completed", exitCode: 0 };
+    expect(SocketMessageSchema.parse(msg).type).toBe("status");
+  });
+  it("should validate registered message", () => {
+    const msg = { type: "registered", agentId: "auth-a1b2" };
+    expect(SocketMessageSchema.parse(msg).type).toBe("registered");
+  });
+  it("should validate message message", () => {
+    const msg = { type: "message", content: "check the auth" };
+    expect(SocketMessageSchema.parse(msg).type).toBe("message");
+  });
+  it("should validate stop message", () => {
+    const msg = { type: "stop", reason: "user requested" };
+    expect(SocketMessageSchema.parse(msg).type).toBe("stop");
   });
 });
