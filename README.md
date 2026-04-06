@@ -2,122 +2,298 @@
 
 An MCP server that turns any Claude Code terminal into a multi-agent orchestrator. No app, no GUI — your terminal is the command center.
 
-Say "spawn an agent to refactor auth" and Orra MCP creates a git worktree, launches a Claude Code session in it, and gives you tools to monitor, message, chain, and stop agents — all from your current Claude Code session.
+Spawn agents that work in isolated git worktrees, register existing terminals as agents, monitor everything from one place, and chain agents together so they hand off work automatically.
 
 ```
 Your Terminal (Claude Code)
     ↕ stdio MCP
-orra-mcp server
-    ├── orra_spawn     → git worktree + claude session
-    ├── orra_list      → all agents with status
-    ├── orra_status    → one agent's state + recent output
-    ├── orra_output    → full/tail of agent's stream
-    ├── orra_stop      → kill process + optional cleanup
-    ├── orra_message   → inject input to running agent
-    └── orra_link      → when A finishes, B starts
+orra-mcp server (orchestrator mode)
+    ├── orra_spawn          → create worktree + start claude
+    ├── orra_list           → all agents with status + previews
+    ├── orra_status         → one agent's state + recent output
+    ├── orra_output         → full/tail of agent's stream
+    ├── orra_stop           → kill process + optional cleanup
+    ├── orra_message        → send input to agent (answers questions too)
+    ├── orra_link           → when A finishes, auto-spawn B
+    └── orra_install_hooks  → set up automatic input detection
          ↓
-    Agent processes (PTY children)
-    ├── Agent A: claude in worktrees/auth-refactor/
-    ├── Agent B: claude in worktrees/fix-billing/
-    └── Agent C: claude in worktrees/add-tests/
+    Agent processes
+    ├── Spawned: claude in worktrees/auth-refactor/
+    ├── Spawned: claude in worktrees/fix-billing/
+    └── External: your other terminal, registered via orra_register
 ```
 
-## Install
+## Quick Start
+
+### 1. Install
+
+```bash
+npm install -g orra-mcp
+claude mcp add orra -- orra-mcp
+```
+
+Or without global install:
 
 ```bash
 claude mcp add orra -- npx orra-mcp
 ```
 
-That's it. The MCP server runs as a stdio subprocess — Claude Code spawns it automatically.
+### 2. Restart Claude Code
+
+Start a new Claude Code session. Orra detects it's the first terminal and runs in **orchestrator mode** with all management tools.
+
+### 3. Spawn your first agent
+
+```
+You: "spawn an agent to add input validation to the API"
+```
+
+Orra creates a git worktree, launches a Claude Code session in it, and the agent starts working on its own branch. You stay in your terminal, orchestrating.
+
+### 4. Monitor and interact
+
+```
+You: "what agents are running?"        → orra_list
+You: "how's the validation agent?"     → orra_status
+You: "tell it to also check email format" → orra_message
+```
+
+### 5. Chain agents
+
+```
+You: "when the validation agent finishes, spawn a reviewer"
+```
+
+The reviewer auto-spawns when validation completes, with full context about the branch and task.
 
 ## How It Works
 
-1. **You ask** Claude Code to spawn an agent with a task
-2. **Orra MCP** creates a git worktree and launches `claude` in it via PTY
-3. **The agent** works independently — committing to its own branch
-4. **You monitor** via `orra_list`, `orra_status`, `orra_output`
-5. **You interact** via `orra_message` to course-correct running agents
-6. **You chain** via `orra_link` — "when auth agent finishes, spawn a review agent"
-7. **You merge** the branch when ready, then clean up with `orra_stop`
+### Two Ways to Create Agents
 
-## Tools
+**Spawn from the orchestrator (automated):**
 
-| Tool | Purpose |
-|------|---------|
-| `orra_spawn` | Create worktree + start Claude with a task |
-| `orra_list` | All agents with status, branch, last activity |
-| `orra_status` | One agent's detailed state + recent output |
-| `orra_output` | Full or tail of agent's captured output |
-| `orra_stop` | Kill process, optionally remove worktree |
-| `orra_message` | Send a message to a running agent's session |
-| `orra_link` | When A completes → auto-spawn B with context |
+Orra creates a worktree, launches `claude`, and manages the full lifecycle. You monitor and interact from your terminal.
 
-### Agent Linking
+```
+You: "spawn an agent to refactor auth"
+→ git worktree add worktrees/refactor-auth-a1b2 -b orra/refactor-auth-a1b2
+→ claude starts working in the worktree
+→ Agent shows up in orra_list
+```
 
-Chain agents together with template variables:
+**Register an existing terminal (manual):**
+
+Already have a Claude Code session running? Register it with the orchestrator. Open another terminal:
+
+```
+Terminal B: "register with Orra, I'm working on the billing fix"
+→ orra_register connects to the orchestrator via Unix socket
+→ Terminal B is now a tracked agent
+→ Shows up in orra_list alongside spawned agents
+```
+
+### Dual-Mode Server
+
+The same `orra-mcp` package runs in two modes, auto-detected on startup:
+
+| Mode | When | Tools |
+|------|------|-------|
+| **Orchestrator** | First terminal (no existing socket) | `orra_spawn`, `orra_list`, `orra_status`, `orra_output`, `orra_stop`, `orra_message`, `orra_link`, `orra_install_hooks` |
+| **Agent** | Socket exists (orchestrator running) | `orra_register`, `orra_unregister`, `orra_heartbeat`, `orra_install_hooks` |
+
+### Automatic Input Detection
+
+When agents need input — permission prompts, clarifying questions, or presenting options — Orra detects it automatically via Claude Code hooks:
+
+```
+orra_list shows:
+
+  auth-agent     ⏳ waiting  "Allow Bash: npm install?"
+  billing-agent  💬 idle     "Which approach? A) retry B) queue C) skip"
+  test-agent     🔄 running  Writing integration tests...
+
+You: "message auth-agent: yes"        → approves the permission
+You: "message billing-agent: B"       → answers the question
+```
+
+**Setup hooks** (one-time per project):
+
+```
+You: "install Orra hooks"  → orra_install_hooks
+```
+
+This writes to `.claude/settings.local.json` (gitignored, per-user) so it doesn't affect other developers.
+
+### Agent Chaining
+
+Chain agents with template variables:
 
 ```
 orra_link({
   from: "auth-agent",
-  to: { task: "Review changes on branch {{from.branch}}" },
+  to: { task: "Review the changes on branch {{from.branch}}" },
   on: "success"
 })
 ```
 
-Available template variables: `{{from.branch}}`, `{{from.worktree}}`, `{{from.task}}`, `{{from.status}}`
+Available variables: `{{from.branch}}`, `{{from.worktree}}`, `{{from.task}}`, `{{from.status}}`
+
+Trigger conditions: `"success"` (exit 0), `"failure"` (exit non-zero), `"any"`
+
+### Custom Spawn Commands
+
+If your team has custom worktree setup (copying files, configuring environments, sandbox scripts), configure a custom spawn command:
+
+```json
+// .orra/config.json
+{
+  "spawnCommand": "yarn sandbox {{branch}}",
+  "defaultModel": null,
+  "defaultAllowedTools": null
+}
+```
+
+When `orra_spawn` runs, it executes your command instead of the default `git worktree add` + `claude`. Your script handles everything — worktree creation, env setup, starting claude. Orra wraps it in a PTY and monitors the output.
+
+Template variables: `{{branch}}`, `{{task}}`, `{{agentId}}`
+
+## Real-World Example: Multi-Agent Pipeline
+
+Run multiple agent teams across different features, all monitored from one terminal:
+
+```
+You (Terminal A — orchestrator):
+
+┌────────────────────────┬──────────┬────────────────────────────────────┐
+│ payments-pipeline       │ 💬 idle  │ Lisa: "What should happen when     │
+│                         │          │  payment fails mid-checkout?"      │
+├────────────────────────┼──────────┼────────────────────────────────────┤
+│ auth-refactor           │ 🔄 run  │ Milhouse: implementing JWT...      │
+├────────────────────────┼──────────┼────────────────────────────────────┤
+│ onboarding-flow         │ ⏳ wait  │ "Allow Bash: npm run migrate?"     │
+├────────────────────────┼──────────┼────────────────────────────────────┤
+│ api-v2                  │ ✅ done  │ Maggie: PR #312 approved           │
+└────────────────────────┴──────────┴────────────────────────────────────┘
+
+You: "message payments-pipeline: fail the order, refund, email the user"
+You: "message onboarding-flow: yes"
+```
+
+Four workstreams, one terminal, you only engage when someone needs you.
 
 ## State
 
-All state lives on the filesystem — no database required:
+All state lives on the filesystem in `.orra/` — no database, no external services:
 
 ```
 .orra/
-├── config.json             — project settings
+├── orra.sock               — Unix socket (live while orchestrator runs)
+├── config.json             — project settings + custom spawn command
 ├── agents/
-│   ├── <id>.json           — agent metadata (task, branch, pid, status)
-│   └── <id>.log            — captured output from agent
+│   ├── <id>.json           — agent metadata (task, branch, pid, status, type)
+│   └── <id>.log            — captured output
 └── links.json              — coordination rules
 ```
 
-Agents are ephemeral processes (they die with the MCP server), but state persists. On restart, running agents are marked `interrupted` and `orra_list` shows the full history so you can re-spawn incomplete work.
+**Agent statuses:** `running`, `idle` (finished a turn), `waiting` (blocked on permission), `completed`, `failed`, `interrupted`, `killed`
 
-## Design Decisions
+**Persistence model:** Agent processes are ephemeral (die with the MCP server), but state files persist. On restart, `orra_list` shows the full history — you can re-spawn incomplete work.
 
-- **stdio MCP** — simplest integration, Claude Code spawns it automatically
-- **Interactive PTY via `node-pty`** — agents run full `claude` sessions, enabling `orra_message`
-- **Filesystem state** — `.orra/` is human-readable, no external services
-- **Worktrees persist** — until branch is merged and explicitly cleaned up
-- **Ephemeral processes, persistent history** — agents don't survive restarts, but their state does
+## Tools Reference
 
-## Tech Stack
+### Orchestrator Mode
 
-- TypeScript, Node.js 20+
-- `@modelcontextprotocol/sdk` (stdio transport)
-- `node-pty` (PTY management)
-- `zod` (schema validation)
-- `vitest` (testing)
+| Tool | Input | Description |
+|------|-------|-------------|
+| `orra_spawn` | `task`, `branch?`, `model?`, `allowedTools?` | Create a worktree and start a Claude agent |
+| `orra_list` | — | List all agents with status, preview, pending questions |
+| `orra_status` | `agentId` | Get detailed state + recent output for one agent |
+| `orra_output` | `agentId`, `tail?` | Get full or last N lines of agent output |
+| `orra_stop` | `agentId`, `cleanup?` | Stop agent, optionally remove worktree + branch |
+| `orra_message` | `agentId`, `message` | Send input to agent (also answers permission prompts) |
+| `orra_link` | `from`, `to`, `on` | Auto-spawn an agent when another completes |
+| `orra_install_hooks` | — | Install input detection hooks in this project |
+
+### Agent Mode
+
+| Tool | Input | Description |
+|------|-------|-------------|
+| `orra_register` | `task`, `branch?` | Register this terminal as an agent |
+| `orra_unregister` | `status?` | Unregister and report completion |
+| `orra_heartbeat` | `activity` | Send a status update to the orchestrator |
+| `orra_install_hooks` | — | Install input detection hooks in this project |
+
+## Requirements
+
+- Node.js 20+
+- [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code) installed
+- A git repository (agents work in worktrees)
+
+## Development
+
+```bash
+git clone https://github.com/bjornj12/Orra-mcp.git
+cd Orra-mcp
+npm install
+npm run build
+npm test
+```
+
+### Project Structure
+
+```
+src/
+├── index.ts                — Entry point, mode detection, stdio transport
+├── server.ts               — MCP server, conditional tool registration
+├── types.ts                — Zod schemas, TypeScript types, socket protocol
+├── bin/
+│   └── orra-hook.ts        — Hook script for PermissionRequest + Stop events
+├── core/
+│   ├── agent-manager.ts    — Central orchestrator (spawn, stop, message, link)
+│   ├── socket-server.ts    — Unix domain socket server (orchestrator side)
+│   ├── socket-client.ts    — Unix domain socket client (agent side)
+│   ├── worktree.ts         — Git worktree create/remove
+│   ├── process.ts          — node-pty wrapper for PTY lifecycle
+│   ├── stream-parser.ts    — ANSI stripping, output collection
+│   ├── state.ts            — .orra/ filesystem state persistence
+│   └── linker.ts           — Agent chaining, template expansion
+└── tools/                  — One file per MCP tool handler
+```
+
+### Running Tests
+
+```bash
+npm test              # run all tests
+npm run test:watch    # watch mode
+```
+
+132 tests across 13 test files covering unit tests (types, state, worktree, process, stream parser, linker, socket server/client, hook script) and integration tests (agent lifecycle, linking, external agents, hooks).
 
 ## Roadmap
 
-### v1 (MVP) — Current
+### v1 (Current)
 
-Core orchestration: spawn, monitor, message, chain, and stop agents in git worktrees.
+- Spawn and manage agents in git worktrees
+- Register existing terminals as agents
+- Automatic input detection via hooks
+- Agent chaining with template variables
+- Custom spawn commands for team workflows
 
-### v2 — Agent-to-Agent Communication
+### v2 — Pipeline Templates
 
-Agents get their own MCP connection with tools like `report_status` and `get_sibling_status`. Agents become aware of each other and can coordinate without routing through the orchestrator.
+Define reusable multi-stage workflows (`spec -> implement -> review -> merge`) as templates. Run a task through a pipeline and Orra handles stage transitions, review gates, and escalation.
 
-### v3 — Pipeline Templates
+### v3 — Agent-to-Agent Communication
 
-Structured multi-stage workflows. Define reusable pipelines like `spec → implement → review → merge` as templates. Run a task through a pipeline and Orra MCP handles the stage transitions, review gates, and escalation to the user when confidence is low.
+Agents get their own MCP tools (`report_status`, `get_sibling_status`) to coordinate directly without routing through the orchestrator.
 
 ### v4 — CLI Companion
 
-`orra` CLI for non-MCP usage. Spawn and manage agents from any terminal without Claude Code. Same `.orra/` state, same worktree model — just a different interface.
+`orra` CLI for non-MCP usage. Spawn and manage agents from any terminal without Claude Code.
 
 ### v5 — Distributed Agents
 
-Agents running on remote machines. SSH-based worktree creation, remote PTY management, and cross-machine coordination. For teams that want to throw more compute at a problem.
+Agents on remote machines. SSH-based worktree creation, remote PTY management, cross-machine coordination.
 
 ## License
 

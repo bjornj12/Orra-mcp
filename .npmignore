@@ -1,0 +1,9 @@
+src/
+tests/
+docs/
+.orra/
+worktrees/
+.claude/
+vitest.config.ts
+tsconfig.json
+*.tgz

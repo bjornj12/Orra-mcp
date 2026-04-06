@@ -7,18 +7,35 @@
   "bin": {
     "orra-mcp": "dist/index.js"
   },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
     "test": "vitest run",
     "test:watch": "vitest",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "prepublishOnly": "npm run build"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bjornj12/Orra-mcp.git"
+  },
+  "bugs": {
+    "url": "https://github.com/bjornj12/Orra-mcp/issues"
+  },
+  "homepage": "https://github.com/bjornj12/Orra-mcp#readme",
   "keywords": [
     "mcp",
     "claude-code",
     "orchestrator",
-    "agents"
+    "agents",
+    "multi-agent",
+    "worktree",
+    "claude"
   ],
   "license": "MIT",
   "engines": {
