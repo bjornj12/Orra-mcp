@@ -23,7 +23,7 @@ export function createServer(
   if (mode === "orchestrator") {
     server.tool(
       "orra",
-      "Multi-agent orchestrator. Actions: spawn (create agent in worktree), list (all agents), status (one agent detail), output (agent log), stop (kill agent), message (send input / answer questions), link (chain agents), takeover (hand off to human)",
+      "Manage parallel Claude Code agents working in git worktrees. Use this tool whenever the user mentions agents, workers, spawning tasks, or checking on running work. Actions: spawn (start a new agent on a task), list (show all running/completed agents), status (detailed view of one agent), output (read agent logs), stop (kill an agent), message (send input to agent or answer its questions), link (auto-spawn agent B when agent A finishes), takeover (stop agent and get worktree path for manual work)",
       orraSchema.shape,
       async (args) => handleOrra(manager, projectRoot, orraSchema.parse(args)),
     );
