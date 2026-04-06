@@ -175,6 +175,34 @@ describe("AgentStateSchema with type field", () => {
   });
 });
 
+describe("AgentStatus with idle and waiting", () => {
+  it("should accept idle status", () => {
+    expect(AgentStatus.parse("idle")).toBe("idle");
+  });
+  it("should accept waiting status", () => {
+    expect(AgentStatus.parse("waiting")).toBe("waiting");
+  });
+});
+
+describe("SocketMessageSchema — hook messages", () => {
+  it("should validate question message", () => {
+    const msg = { type: "question", agentId: "test-a1b2", tool: "Bash", input: { command: "npm install" } };
+    expect(SocketMessageSchema.parse(msg).type).toBe("question");
+  });
+  it("should validate turn_complete message", () => {
+    const msg = { type: "turn_complete", agentId: "test-a1b2" };
+    expect(SocketMessageSchema.parse(msg).type).toBe("turn_complete");
+  });
+  it("should validate answer message", () => {
+    const msg = { type: "answer", allow: true };
+    expect(SocketMessageSchema.parse(msg).type).toBe("answer");
+  });
+  it("should validate answer with deny and reason", () => {
+    const msg = { type: "answer", allow: false, reason: "too dangerous" };
+    expect(SocketMessageSchema.parse(msg).type).toBe("answer");
+  });
+});
+
 describe("SocketMessageSchema", () => {
   it("should validate register message", () => {
     const msg = { type: "register", task: "auth refactor", branch: "feat/auth" };
