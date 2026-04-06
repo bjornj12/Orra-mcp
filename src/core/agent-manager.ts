@@ -4,6 +4,7 @@ import { WorktreeManager, slugify } from "./worktree.js";
 import { ProcessManager, type ManagedProcess } from "./process.js";
 import { StreamParser } from "./stream-parser.js";
 import { Linker, expandTemplate } from "./linker.js";
+import { SocketServer } from "./socket-server.js";
 import type { AgentState, Link, LinkTo, LinkTrigger } from "../types.js";
 
 export interface SpawnAgentOptions {
@@ -40,6 +41,7 @@ export class AgentManager {
   private linker: Linker;
   private runningProcesses: Map<string, ManagedProcess> = new Map();
   private killedAgents: Set<string> = new Set();
+  private socketServer: SocketServer | null = null;
 
   constructor(private projectRoot: string) {
     this.state = new StateManager(projectRoot);
@@ -53,6 +55,25 @@ export class AgentManager {
     const links = await this.state.loadLinks();
     this.linker.loadLinks(links);
     await this.state.reconcile();
+
+    this.socketServer = new SocketServer(this.projectRoot);
+    this.socketServer.onRegister = (_socket, msg) => {
+      return this.handleExternalRegister(msg.task, msg.branch);
+    };
+    this.socketServer.onOutput = (agentId, data) => {
+      this.state.appendLog(agentId, data).catch(() => {});
+    };
+    this.socketServer.onStatus = (agentId, status, exitCode) => {
+      this.handleExternalStatus(agentId, status, exitCode).catch((err) =>
+        console.error(`Failed to handle external status for ${agentId}:`, err)
+      );
+    };
+    this.socketServer.onDisconnect = (agentId) => {
+      this.handleExternalDisconnect(agentId).catch((err) =>
+        console.error(`Failed to handle disconnect for ${agentId}:`, err)
+      );
+    };
+    await this.socketServer.start();
   }
 
   async spawnAgent(options: SpawnAgentOptions): Promise<SpawnResult> {
@@ -68,6 +89,7 @@ export class AgentManager {
     const now = new Date().toISOString();
     const agentState: AgentState = {
       id: agentId,
+      type: "spawned",
       task: options.task,
       branch,
       worktree: `worktrees/${agentId}`,
@@ -141,6 +163,19 @@ export class AgentManager {
 
     this.killedAgents.add(agentId);
 
+    if (agent.type === "external") {
+      this.socketServer?.sendToAgent(agentId, {
+        type: "stop",
+        reason: "Orchestrator requested stop",
+      });
+
+      agent.status = "killed";
+      agent.updatedAt = new Date().toISOString();
+      await this.state.saveAgent(agent);
+
+      return { agentId, status: "killed", cleaned: false };
+    }
+
     const proc = this.runningProcesses.get(agentId);
     if (proc && agent.status === "running") {
       proc.kill("SIGTERM");
@@ -189,13 +224,17 @@ export class AgentManager {
     const agent = await this.state.loadAgent(agentId);
     if (!agent) throw new Error(`Agent ${agentId} not found`);
     if (agent.status !== "running")
-      throw new Error(
-        `Agent ${agentId} is not running (status: ${agent.status})`
-      );
+      throw new Error(`Agent ${agentId} is not running (status: ${agent.status})`);
+
+    if (agent.type === "external") {
+      if (!this.socketServer?.sendToAgent(agentId, { type: "message", content: message })) {
+        throw new Error(`Agent ${agentId} is not connected`);
+      }
+      return;
+    }
 
     const proc = this.runningProcesses.get(agentId);
     if (!proc) throw new Error(`Agent ${agentId} has no active process`);
-
     proc.write(message + "\n");
   }
 
@@ -268,6 +307,69 @@ export class AgentManager {
 
     for (const link of matchingLinks) {
       await this.fireLink(link, agent);
+    }
+  }
+
+  private handleExternalRegister(task: string, branch?: string): string {
+    const shortId = crypto.randomBytes(2).toString("hex");
+    const slug = slugify(task);
+    const agentId = `${slug}-${shortId}`;
+
+    const now = new Date().toISOString();
+    const agentState: AgentState = {
+      id: agentId,
+      type: "external",
+      task,
+      branch: branch ?? "",
+      worktree: "",
+      pid: 0,
+      status: "running",
+      createdAt: now,
+      updatedAt: now,
+      exitCode: null,
+      model: null,
+      allowedTools: null,
+    };
+
+    this.state.saveAgent(agentState).catch((err) =>
+      console.error(`Failed to save external agent ${agentId}:`, err)
+    );
+
+    return agentId;
+  }
+
+  private async handleExternalStatus(agentId: string, status: string, exitCode: number): Promise<void> {
+    const agent = await this.state.loadAgent(agentId);
+    if (!agent) return;
+
+    agent.status = status === "completed" ? "completed" : "failed";
+    agent.exitCode = exitCode;
+    agent.updatedAt = new Date().toISOString();
+    await this.state.saveAgent(agent);
+
+    const matchingLinks = this.linker.findMatchingLinks(agentId, exitCode);
+    this.linker.evaluateAndExpire(agentId, exitCode);
+    await this.state.saveLinks(this.linker.getAllLinks());
+
+    for (const link of matchingLinks) {
+      await this.fireLink(link, agent);
+    }
+  }
+
+  private async handleExternalDisconnect(agentId: string): Promise<void> {
+    if (this.killedAgents.has(agentId)) return;
+
+    const agent = await this.state.loadAgent(agentId);
+    if (!agent || agent.status !== "running") return;
+
+    agent.status = "interrupted";
+    agent.updatedAt = new Date().toISOString();
+    await this.state.saveAgent(agent);
+  }
+
+  async shutdown(): Promise<void> {
+    if (this.socketServer) {
+      await this.socketServer.stop();
     }
   }
 
