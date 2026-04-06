@@ -12,6 +12,8 @@ export class SocketServer {
   onOutput: (agentId: string, data: string) => void = () => {};
   onStatus: (agentId: string, status: string, exitCode: number) => void = () => {};
   onDisconnect: (agentId: string) => void = () => {};
+  onQuestion: (hookSocket: net.Socket, agentId: string, tool: string, input: Record<string, unknown>) => void = () => {};
+  onTurnComplete: (agentId: string) => void = () => {};
 
   constructor(private projectRoot: string) {
     this.sockPath = path.join(projectRoot, ".orra", "orra.sock");
@@ -41,6 +43,12 @@ export class SocketServer {
         resolve();
       });
     });
+  }
+
+  answerQuestion(hookSocket: net.Socket, allow: boolean, reason?: string): void {
+    const msg: Record<string, unknown> = { type: "answer", allow };
+    if (reason) msg.reason = reason;
+    hookSocket.write(JSON.stringify(msg) + "\n");
   }
 
   sendToAgent(agentId: string, message: SocketMessage): boolean {
@@ -106,6 +114,18 @@ export class SocketServer {
       }
       case "status": {
         if (agentId) this.onStatus(agentId, msg.status, msg.exitCode);
+        break;
+      }
+      case "question": {
+        if ("agentId" in msg && "tool" in msg && "input" in msg) {
+          this.onQuestion(socket, msg.agentId, msg.tool, msg.input as Record<string, unknown>);
+        }
+        break;
+      }
+      case "turn_complete": {
+        if ("agentId" in msg) {
+          this.onTurnComplete(msg.agentId);
+        }
         break;
       }
       default: break;
