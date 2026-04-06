@@ -18,6 +18,7 @@ import { registerSchema, handleRegister } from "./tools/register.js";
 import { unregisterSchema, handleUnregister } from "./tools/unregister.js";
 import { heartbeatSchema, handleHeartbeat } from "./tools/heartbeat.js";
 import { handleInstallHooks } from "./tools/install-hooks.js";
+import { takeoverSchema, handleTakeover } from "./tools/takeover.js";
 import type { OrraMode } from "./types.js";
 
 export function createServer(
@@ -35,7 +36,7 @@ export function createServer(
   const manager = new AgentManager(projectRoot);
 
   if (mode === "orchestrator") {
-    registerOrchestratorTools(server, manager);
+    registerOrchestratorTools(server, manager, projectRoot);
   } else {
     const client = new SocketClient(projectRoot);
     registerAgentTools(server, client);
@@ -52,7 +53,7 @@ export function createServer(
   return { server, manager };
 }
 
-function registerOrchestratorTools(server: McpServer, manager: AgentManager): void {
+function registerOrchestratorTools(server: McpServer, manager: AgentManager, projectRoot: string): void {
   server.tool(
     "orra_spawn",
     "Create a git worktree and start a Claude Code agent with a task",
@@ -102,6 +103,13 @@ function registerOrchestratorTools(server: McpServer, manager: AgentManager): vo
     "When agent A completes, auto-spawn agent B with context",
     linkAgentsSchema.shape,
     async (args) => handleLinkAgents(manager, linkAgentsSchema.parse(args)),
+  );
+
+  server.tool(
+    "orra_takeover",
+    "Stop an agent and get the worktree path so you can take over manually in a new terminal",
+    takeoverSchema.shape,
+    async (args) => handleTakeover(manager, projectRoot, takeoverSchema.parse(args)),
   );
 }
 
