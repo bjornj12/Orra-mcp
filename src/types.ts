@@ -59,6 +59,7 @@ export type Link = z.infer<typeof LinkSchema>;
 export const ConfigSchema = z.object({
   defaultModel: z.string().nullable(),
   defaultAllowedTools: z.array(z.string()).nullable(),
+  spawnCommand: z.string().nullable().default(null),
 });
 export type Config = z.infer<typeof ConfigSchema>;
 
