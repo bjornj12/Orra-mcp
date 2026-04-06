@@ -60,8 +60,27 @@ describe("WorktreeManager", () => {
 
   it("should remove a worktree", async () => {
     const result = await wt.create("test-a1b2");
-    await wt.remove("test-a1b2");
+    const removeResult = await wt.remove("test-a1b2");
     expect(fs.existsSync(result.worktreePath)).toBe(false);
+    expect(removeResult.branchDeleted).toBe(false);
+  });
+
+  it("should remove worktree and delete merged branch", async () => {
+    const result = await wt.create("test-a1b2");
+    // Merge the branch so it can be safely deleted
+    execSync(`git merge ${result.branch} --no-edit`, { cwd: tmpDir });
+    const removeResult = await wt.remove("test-a1b2", result.branch);
+    expect(removeResult.branchDeleted).toBe(true);
+  });
+
+  it("should warn when branch is not merged on cleanup", async () => {
+    const result = await wt.create("test-c3d4");
+    // Make a commit on the worktree branch so it diverges
+    fs.writeFileSync(path.join(result.worktreePath, "test.txt"), "test");
+    execSync("git add test.txt && git commit -m 'diverge'", { cwd: result.worktreePath });
+    const removeResult = await wt.remove("test-c3d4", result.branch);
+    expect(removeResult.branchDeleted).toBe(false);
+    expect(removeResult.warning).toContain("not fully merged");
   });
 
   it("should throw if worktree already exists", async () => {

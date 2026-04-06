@@ -30,11 +30,28 @@ export class WorktreeManager {
     return { branch, worktreePath };
   }
 
-  async remove(agentId: string): Promise<void> {
+  async remove(agentId: string, branch?: string): Promise<{ branchDeleted: boolean; warning?: string }> {
     const worktreePath = path.join(this.projectRoot, "worktrees", agentId);
     await execFileAsync("git", ["worktree", "remove", worktreePath, "--force"], {
       cwd: this.projectRoot,
     });
+
+    if (!branch) {
+      return { branchDeleted: false };
+    }
+
+    // Try to delete the branch (git branch -d only works if merged)
+    try {
+      await execFileAsync("git", ["branch", "-d", branch], {
+        cwd: this.projectRoot,
+      });
+      return { branchDeleted: true };
+    } catch {
+      return {
+        branchDeleted: false,
+        warning: `Branch ${branch} was not deleted (not fully merged). Use 'git branch -D ${branch}' to force delete.`,
+      };
+    }
   }
 
   async isBranchMerged(branch: string): Promise<boolean> {
