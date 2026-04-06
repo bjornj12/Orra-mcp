@@ -1,10 +1,13 @@
 import * as crypto from "node:crypto";
+import * as net from "node:net";
+import * as fsp from "node:fs/promises";
 import { StateManager } from "./state.js";
 import { WorktreeManager, slugify } from "./worktree.js";
 import { ProcessManager, type ManagedProcess } from "./process.js";
 import { StreamParser } from "./stream-parser.js";
 import { Linker, expandTemplate } from "./linker.js";
 import { SocketServer } from "./socket-server.js";
+import { parseAllowDeny } from "../bin/orra-hook.js";
 import type { AgentState, Link, LinkTo, LinkTrigger } from "../types.js";
 
 export interface SpawnAgentOptions {
@@ -42,6 +45,9 @@ export class AgentManager {
   private runningProcesses: Map<string, ManagedProcess> = new Map();
   private killedAgents: Set<string> = new Set();
   private socketServer: SocketServer | null = null;
+  private pendingQuestions: Map<string, { hookSocket: net.Socket; tool: string; input: Record<string, unknown> }> = new Map();
+  private logOffsets: Map<string, number> = new Map();
+  private turnPreviews: Map<string, string> = new Map();
 
   constructor(private projectRoot: string) {
     this.state = new StateManager(projectRoot);
@@ -71,6 +77,16 @@ export class AgentManager {
     this.socketServer.onDisconnect = (agentId) => {
       this.handleExternalDisconnect(agentId).catch((err) =>
         console.error(`Failed to handle disconnect for ${agentId}:`, err)
+      );
+    };
+    this.socketServer.onQuestion = (hookSocket, agentId, tool, input) => {
+      this.handleQuestion(hookSocket, agentId, tool, input).catch((err) =>
+        console.error(`Failed to handle question for ${agentId}:`, err)
+      );
+    };
+    this.socketServer.onTurnComplete = (agentId) => {
+      this.handleTurnComplete(agentId).catch((err) =>
+        console.error(`Failed to handle turn_complete for ${agentId}:`, err)
       );
     };
     await this.socketServer.start();
@@ -220,9 +236,80 @@ export class AgentManager {
     return { agentId, status: "killed", cleaned, warning };
   }
 
+  private async handleQuestion(
+    hookSocket: net.Socket,
+    agentId: string,
+    tool: string,
+    input: Record<string, unknown>
+  ): Promise<void> {
+    const agent = await this.state.loadAgent(agentId);
+    if (!agent) return;
+
+    agent.status = "waiting";
+    agent.updatedAt = new Date().toISOString();
+    await this.state.saveAgent(agent);
+
+    this.pendingQuestions.set(agentId, { hookSocket, tool, input });
+  }
+
+  private async handleTurnComplete(agentId: string): Promise<void> {
+    const agent = await this.state.loadAgent(agentId);
+    if (!agent) return;
+
+    if (agent.status !== "running") return;
+
+    const offset = this.logOffsets.get(agentId) ?? 0;
+    const { content, newOffset } = await this.state.readLogRange(agentId, offset);
+    this.logOffsets.set(agentId, newOffset);
+
+    if (content.length > 0) {
+      const lines = content.split("\n").filter((l) => l.trim().length > 0);
+      const preview = lines.slice(-3).join("\n");
+      this.turnPreviews.set(agentId, preview);
+    }
+
+    agent.status = "idle";
+    agent.updatedAt = new Date().toISOString();
+    await this.state.saveAgent(agent);
+  }
+
+  getTurnPreview(agentId: string): string | null {
+    return this.turnPreviews.get(agentId) ?? null;
+  }
+
+  getPendingQuestion(agentId: string): { tool: string; input: Record<string, unknown> } | null {
+    const pending = this.pendingQuestions.get(agentId);
+    if (!pending) return null;
+    return { tool: pending.tool, input: pending.input };
+  }
+
   async sendMessage(agentId: string, message: string): Promise<void> {
     const agent = await this.state.loadAgent(agentId);
     if (!agent) throw new Error(`Agent ${agentId} not found`);
+
+    // Handle waiting agent (pending permission question)
+    if (agent.status === "waiting") {
+      const pending = this.pendingQuestions.get(agentId);
+      if (!pending) throw new Error(`Agent ${agentId} has no pending question`);
+
+      const allow = parseAllowDeny(message);
+      this.socketServer!.answerQuestion(pending.hookSocket, allow, allow ? undefined : message);
+      this.pendingQuestions.delete(agentId);
+
+      agent.status = "running";
+      agent.updatedAt = new Date().toISOString();
+      await this.state.saveAgent(agent);
+      return;
+    }
+
+    // Handle idle agent (finished a turn, needs follow-up input)
+    if (agent.status === "idle") {
+      agent.status = "running";
+      agent.updatedAt = new Date().toISOString();
+      await this.state.saveAgent(agent);
+      // Fall through to send the message normally
+    }
+
     if (agent.status !== "running")
       throw new Error(`Agent ${agentId} is not running (status: ${agent.status})`);
 
