@@ -1,5 +1,7 @@
 import { z } from "zod";
 
+export type OrraMode = "orchestrator" | "agent";
+
 export const AgentStatus = z.enum([
   "running",
   "completed",
