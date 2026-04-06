@@ -23,6 +23,7 @@ export interface StopResult {
   agentId: string;
   status: string;
   cleaned: boolean;
+  warning?: string;
 }
 
 export interface LinkResult {
@@ -38,6 +39,7 @@ export class AgentManager {
   private processes: ProcessManager;
   private linker: Linker;
   private runningProcesses: Map<string, ManagedProcess> = new Map();
+  private killedAgents: Set<string> = new Set();
 
   constructor(private projectRoot: string) {
     this.state = new StateManager(projectRoot);
@@ -88,11 +90,14 @@ export class AgentManager {
 
     const managed = this.processes.spawn({
       command: "claude",
-      args: [...claudeArgs, options.task], // -p flag is last in claudeArgs, task follows it
+      args: claudeArgs,
       cwd: worktreePath,
       onData: (data) => parser.feed(data),
       onExit: (exitCode) => this.handleAgentExit(agentId, exitCode),
     });
+
+    // Write the task to stdin after spawn so claude starts in interactive mode
+    managed.write(options.task + "\n");
 
     agentState.pid = managed.pid;
     await this.state.saveAgent(agentState);
@@ -107,6 +112,7 @@ export class AgentManager {
   }
 
   async listAgents(): Promise<AgentState[]> {
+    await this.state.reconcile();
     return this.state.listAgents();
   }
 
@@ -132,6 +138,8 @@ export class AgentManager {
   async stopAgent(agentId: string, cleanup = false): Promise<StopResult> {
     const agent = await this.state.loadAgent(agentId);
     if (!agent) throw new Error(`Agent ${agentId} not found`);
+
+    this.killedAgents.add(agentId);
 
     const proc = this.runningProcesses.get(agentId);
     if (proc && agent.status === "running") {
@@ -163,16 +171,18 @@ export class AgentManager {
     await this.state.saveAgent(agent);
 
     let cleaned = false;
+    let warning: string | undefined;
     if (cleanup) {
       try {
-        await this.worktrees.remove(agentId);
+        const result = await this.worktrees.remove(agentId, agent.branch);
         cleaned = true;
+        warning = result.warning;
       } catch {
-        // Worktree removal may fail if branch not merged
+        // Worktree removal may fail
       }
     }
 
-    return { agentId, status: "killed", cleaned };
+    return { agentId, status: "killed", cleaned, warning };
   }
 
   async sendMessage(agentId: string, message: string): Promise<void> {
@@ -215,8 +225,9 @@ export class AgentManager {
   }
 
   private buildClaudeArgs(options: SpawnAgentOptions): string[] {
-    // Interactive mode — no --print. The agent runs as a full interactive session
-    // in a PTY, enabling send_message to inject input via stdin.
+    // Interactive mode — no flags that would make claude non-interactive.
+    // The task is written to stdin after spawn so claude runs as a full
+    // interactive session, enabling send_message to inject further input.
     const args: string[] = [];
 
     if (options.model) {
@@ -227,9 +238,6 @@ export class AgentManager {
       args.push("--allowedTools", options.allowedTools.join(","));
     }
 
-    // Pass the task as -p (initial prompt) so claude starts working immediately
-    args.push("-p");
-
     return args;
   }
 
@@ -238,6 +246,12 @@ export class AgentManager {
     exitCode: number
   ): Promise<void> {
     this.runningProcesses.delete(agentId);
+
+    // If agent was intentionally killed, let stopAgent handle the state update.
+    // Don't evaluate links for killed agents.
+    if (this.killedAgents.has(agentId)) {
+      return;
+    }
 
     const agent = await this.state.loadAgent(agentId);
     if (!agent) return;
