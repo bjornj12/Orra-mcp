@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { AgentManager } from "./core/agent-manager.js";
+import { SocketClient } from "./core/socket-client.js";
 import { spawnAgentSchema, handleSpawnAgent } from "./tools/spawn-agent.js";
 import { handleListAgents } from "./tools/list-agents.js";
 import {
@@ -13,8 +14,15 @@ import {
 import { stopAgentSchema, handleStopAgent } from "./tools/stop-agent.js";
 import { sendMessageSchema, handleSendMessage } from "./tools/send-message.js";
 import { linkAgentsSchema, handleLinkAgents } from "./tools/link-agents.js";
+import { registerSchema, handleRegister } from "./tools/register.js";
+import { unregisterSchema, handleUnregister } from "./tools/unregister.js";
+import { heartbeatSchema, handleHeartbeat } from "./tools/heartbeat.js";
+import type { OrraMode } from "./types.js";
 
-export function createServer(projectRoot: string): {
+export function createServer(
+  projectRoot: string,
+  mode: OrraMode
+): {
   server: McpServer;
   manager: AgentManager;
 } {
@@ -25,6 +33,17 @@ export function createServer(projectRoot: string): {
 
   const manager = new AgentManager(projectRoot);
 
+  if (mode === "orchestrator") {
+    registerOrchestratorTools(server, manager);
+  } else {
+    const client = new SocketClient(projectRoot);
+    registerAgentTools(server, client);
+  }
+
+  return { server, manager };
+}
+
+function registerOrchestratorTools(server: McpServer, manager: AgentManager): void {
   server.tool(
     "orra_spawn",
     "Create a git worktree and start a Claude Code agent with a task",
@@ -75,6 +94,27 @@ export function createServer(projectRoot: string): {
     linkAgentsSchema.shape,
     async (args) => handleLinkAgents(manager, linkAgentsSchema.parse(args)),
   );
+}
 
-  return { server, manager };
+function registerAgentTools(server: McpServer, client: SocketClient): void {
+  server.tool(
+    "orra_register",
+    "Register this terminal as an agent with the Orra orchestrator",
+    registerSchema.shape,
+    async (args) => handleRegister(client, registerSchema.parse(args)),
+  );
+
+  server.tool(
+    "orra_unregister",
+    "Unregister from the Orra orchestrator and report completion status",
+    unregisterSchema.shape,
+    async (args) => handleUnregister(client, unregisterSchema.parse(args)),
+  );
+
+  server.tool(
+    "orra_heartbeat",
+    "Send a status update to the Orra orchestrator",
+    heartbeatSchema.shape,
+    async (args) => handleHeartbeat(client, heartbeatSchema.parse(args)),
+  );
 }
