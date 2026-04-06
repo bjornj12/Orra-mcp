@@ -1,6 +1,8 @@
 import * as crypto from "node:crypto";
 import * as net from "node:net";
 import * as fsp from "node:fs/promises";
+import * as path from "node:path";
+import { fileURLToPath } from "node:url";
 import { StateManager } from "./state.js";
 import { WorktreeManager, slugify } from "./worktree.js";
 import { ProcessManager, type ManagedProcess } from "./process.js";
@@ -102,6 +104,31 @@ export class AgentManager {
       options.branch
     );
 
+    // Write .claude/settings.json with hooks in the worktree
+    try {
+      const currentDir = path.dirname(fileURLToPath(import.meta.url));
+      const hookScriptPath = path.join(currentDir, "..", "bin", "orra-hook.js");
+      const claudeSettingsDir = path.join(worktreePath, ".claude");
+      await fsp.mkdir(claudeSettingsDir, { recursive: true });
+      await fsp.writeFile(
+        path.join(claudeSettingsDir, "settings.json"),
+        JSON.stringify({
+          hooks: {
+            PermissionRequest: [{
+              matcher: "",
+              hooks: [{ type: "command", command: `node ${hookScriptPath}`, timeout: 300 }],
+            }],
+            Stop: [{
+              matcher: "",
+              hooks: [{ type: "command", command: `node ${hookScriptPath}`, timeout: 5 }],
+            }],
+          },
+        }, null, 2)
+      );
+    } catch {
+      // Hook installation is optional — don't fail the spawn
+    }
+
     const now = new Date().toISOString();
     const agentState: AgentState = {
       id: agentId,
@@ -132,6 +159,7 @@ export class AgentManager {
       cwd: worktreePath,
       onData: (data) => parser.feed(data),
       onExit: (exitCode) => this.handleAgentExit(agentId, exitCode),
+      env: { ORRA_AGENT_ID: agentId },
     });
 
     // Write the task to stdin after spawn so claude starts in interactive mode
