@@ -1,2 +1,20 @@
 #!/usr/bin/env node
-console.error("orra-mcp: starting...");
+import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { createServer } from "./server.js";
+
+async function main() {
+  const projectRoot = process.cwd();
+  const { server, manager } = createServer(projectRoot);
+
+  await manager.init();
+
+  const transport = new StdioServerTransport();
+  await server.connect(transport);
+
+  console.error("orra-mcp: server running on stdio");
+}
+
+main().catch((err) => {
+  console.error("orra-mcp: fatal error:", err);
+  process.exit(1);
+});
