@@ -1,0 +1,37 @@
+{
+  "name": "orra-mcp",
+  "version": "0.1.0",
+  "description": "MCP server that turns Claude Code into a multi-agent orchestrator",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "orra-mcp": "dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "start": "node dist/index.js"
+  },
+  "keywords": [
+    "mcp",
+    "claude-code",
+    "orchestrator",
+    "agents"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=20.0.0"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "node-pty": "^1.1.0",
+    "zod": "^4.3.6"
+  },
+  "devDependencies": {
+    "@types/node": "^25.5.2",
+    "typescript": "^6.0.2",
+    "vitest": "^4.1.2"
+  }
+}
