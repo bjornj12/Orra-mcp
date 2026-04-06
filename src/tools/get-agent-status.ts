@@ -19,18 +19,26 @@ export async function handleGetAgentStatus(
     };
   }
 
+  const response: Record<string, unknown> = {
+    ...result.agent,
+    recentOutput: result.recentOutput,
+  };
+
+  if (result.agent.status === "idle") {
+    const preview = manager.getTurnPreview(args.agentId);
+    if (preview) response.turnPreview = preview;
+  }
+
+  if (result.agent.status === "waiting") {
+    const question = manager.getPendingQuestion(args.agentId);
+    if (question) response.pendingQuestion = { tool: question.tool, input: question.input };
+  }
+
   return {
     content: [
       {
         type: "text" as const,
-        text: JSON.stringify(
-          {
-            ...result.agent,
-            recentOutput: result.recentOutput,
-          },
-          null,
-          2,
-        ),
+        text: JSON.stringify(response, null, 2),
       },
     ],
   };
