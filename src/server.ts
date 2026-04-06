@@ -26,21 +26,21 @@ export function createServer(projectRoot: string): {
   const manager = new AgentManager(projectRoot);
 
   server.tool(
-    "spawn_agent",
+    "orra_spawn",
     "Create a git worktree and start a Claude Code agent with a task",
     spawnAgentSchema.shape,
     async (args) => handleSpawnAgent(manager, spawnAgentSchema.parse(args)),
   );
 
   server.tool(
-    "list_agents",
+    "orra_list",
     "List all agents with their status, branch, and last activity",
     {},
     async () => handleListAgents(manager),
   );
 
   server.tool(
-    "get_agent_status",
+    "orra_status",
     "Get one agent's detailed state and recent output",
     getAgentStatusSchema.shape,
     async (args) =>
@@ -48,7 +48,7 @@ export function createServer(projectRoot: string): {
   );
 
   server.tool(
-    "get_agent_output",
+    "orra_output",
     "Get full or tail of an agent's captured output",
     getAgentOutputSchema.shape,
     async (args) =>
@@ -56,21 +56,21 @@ export function createServer(projectRoot: string): {
   );
 
   server.tool(
-    "stop_agent",
+    "orra_stop",
     "Kill an agent process, optionally remove its worktree",
     stopAgentSchema.shape,
     async (args) => handleStopAgent(manager, stopAgentSchema.parse(args)),
   );
 
   server.tool(
-    "send_message",
+    "orra_message",
     "Send a message to a running agent's session",
     sendMessageSchema.shape,
     async (args) => handleSendMessage(manager, sendMessageSchema.parse(args)),
   );
 
   server.tool(
-    "link_agents",
+    "orra_link",
     "When agent A completes, auto-spawn agent B with context",
     linkAgentsSchema.shape,
     async (args) => handleLinkAgents(manager, linkAgentsSchema.parse(args)),

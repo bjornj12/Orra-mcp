@@ -8,13 +8,13 @@ Say "spawn an agent to refactor auth" and Orra MCP creates a git worktree, launc
 Your Terminal (Claude Code)
     ↕ stdio MCP
 orra-mcp server
-    ├── spawn_agent    → git worktree + claude session
-    ├── list_agents    → all agents with status
-    ├── get_agent_status → one agent's state + recent output
-    ├── get_agent_output → full/tail of agent's stream
-    ├── stop_agent     → kill process + optional cleanup
-    ├── send_message   → inject input to running agent
-    └── link_agents    → when A finishes, B starts
+    ├── orra_spawn     → git worktree + claude session
+    ├── orra_list      → all agents with status
+    ├── orra_status    → one agent's state + recent output
+    ├── orra_output    → full/tail of agent's stream
+    ├── orra_stop      → kill process + optional cleanup
+    ├── orra_message   → inject input to running agent
+    └── orra_link      → when A finishes, B starts
          ↓
     Agent processes (PTY children)
     ├── Agent A: claude in worktrees/auth-refactor/
@@ -35,29 +35,29 @@ That's it. The MCP server runs as a stdio subprocess — Claude Code spawns it a
 1. **You ask** Claude Code to spawn an agent with a task
 2. **Orra MCP** creates a git worktree and launches `claude` in it via PTY
 3. **The agent** works independently — committing to its own branch
-4. **You monitor** via `list_agents`, `get_agent_status`, `get_agent_output`
-5. **You interact** via `send_message` to course-correct running agents
-6. **You chain** via `link_agents` — "when auth agent finishes, spawn a review agent"
-7. **You merge** the branch when ready, then clean up with `stop_agent`
+4. **You monitor** via `orra_list`, `orra_status`, `orra_output`
+5. **You interact** via `orra_message` to course-correct running agents
+6. **You chain** via `orra_link` — "when auth agent finishes, spawn a review agent"
+7. **You merge** the branch when ready, then clean up with `orra_stop`
 
 ## Tools
 
 | Tool | Purpose |
 |------|---------|
-| `spawn_agent` | Create worktree + start Claude with a task |
-| `list_agents` | All agents with status, branch, last activity |
-| `get_agent_status` | One agent's detailed state + recent output |
-| `get_agent_output` | Full or tail of agent's captured output |
-| `stop_agent` | Kill process, optionally remove worktree |
-| `send_message` | Send a message to a running agent's session |
-| `link_agents` | When A completes → auto-spawn B with context |
+| `orra_spawn` | Create worktree + start Claude with a task |
+| `orra_list` | All agents with status, branch, last activity |
+| `orra_status` | One agent's detailed state + recent output |
+| `orra_output` | Full or tail of agent's captured output |
+| `orra_stop` | Kill process, optionally remove worktree |
+| `orra_message` | Send a message to a running agent's session |
+| `orra_link` | When A completes → auto-spawn B with context |
 
 ### Agent Linking
 
 Chain agents together with template variables:
 
 ```
-link_agents({
+orra_link({
   from: "auth-agent",
   to: { task: "Review changes on branch {{from.branch}}" },
   on: "success"
@@ -79,12 +79,12 @@ All state lives on the filesystem — no database required:
 └── links.json              — coordination rules
 ```
 
-Agents are ephemeral processes (they die with the MCP server), but state persists. On restart, running agents are marked `interrupted` and `list_agents` shows the full history so you can re-spawn incomplete work.
+Agents are ephemeral processes (they die with the MCP server), but state persists. On restart, running agents are marked `interrupted` and `orra_list` shows the full history so you can re-spawn incomplete work.
 
 ## Design Decisions
 
 - **stdio MCP** — simplest integration, Claude Code spawns it automatically
-- **Interactive PTY via `node-pty`** — agents run full `claude` sessions, enabling `send_message`
+- **Interactive PTY via `node-pty`** — agents run full `claude` sessions, enabling `orra_message`
 - **Filesystem state** — `.orra/` is human-readable, no external services
 - **Worktrees persist** — until branch is merged and explicitly cleaned up
 - **Ephemeral processes, persistent history** — agents don't survive restarts, but their state does
