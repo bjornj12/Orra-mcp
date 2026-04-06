@@ -3,3 +3,4 @@ dist/
 *.tgz
 .orra/
 worktrees/
+.claude/settings.local.json
