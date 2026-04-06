@@ -117,6 +117,7 @@ describe("ConfigSchema", () => {
     const config: Config = {
       defaultModel: null,
       defaultAllowedTools: null,
+      spawnCommand: null,
     };
     expect(ConfigSchema.parse(config)).toEqual(config);
   });
@@ -125,8 +126,15 @@ describe("ConfigSchema", () => {
     const config: Config = {
       defaultModel: "opus",
       defaultAllowedTools: ["Read", "Edit", "Bash"],
+      spawnCommand: "yarn sandbox {{branch}}",
     };
     expect(ConfigSchema.parse(config)).toEqual(config);
+  });
+
+  it("should default spawnCommand to null if missing", () => {
+    const config = { defaultModel: null, defaultAllowedTools: null };
+    const parsed = ConfigSchema.parse(config);
+    expect(parsed.spawnCommand).toBeNull();
   });
 });
 

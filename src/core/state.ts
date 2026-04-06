@@ -32,7 +32,7 @@ export class StateManager {
     } catch {
       await fs.writeFile(
         this.configPath,
-        JSON.stringify({ defaultModel: null, defaultAllowedTools: null }, null, 2)
+        JSON.stringify({ defaultModel: null, defaultAllowedTools: null, spawnCommand: null }, null, 2)
       );
     }
 
@@ -132,7 +132,7 @@ export class StateManager {
       const data = await fs.readFile(this.configPath, "utf-8");
       return ConfigSchema.parse(JSON.parse(data));
     } catch {
-      return { defaultModel: null, defaultAllowedTools: null };
+      return { defaultModel: null, defaultAllowedTools: null, spawnCommand: null };
     }
   }
 

@@ -32,6 +32,7 @@ describe("StateManager", () => {
       expect(config).toEqual({
         defaultModel: null,
         defaultAllowedTools: null,
+        spawnCommand: null,
       });
     });
 
@@ -178,6 +179,7 @@ describe("StateManager", () => {
       expect(config).toEqual({
         defaultModel: null,
         defaultAllowedTools: null,
+        spawnCommand: null,
       });
     });
   });
