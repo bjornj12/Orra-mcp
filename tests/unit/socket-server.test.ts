@@ -133,6 +133,79 @@ describe("SocketServer", () => {
     expect(fs.existsSync(sockPath)).toBe(true);
   });
 
+  it("should call onQuestion when hook sends question", async () => {
+    let questionData: { agentId: string; tool: string } | null = null;
+    server = new SocketServer(tmpDir);
+    server.onQuestion = (_hookSocket, agentId, tool, _input) => {
+      questionData = { agentId, tool };
+    };
+    await server.start();
+
+    const client = net.createConnection(path.join(tmpDir, ".orra", "orra.sock"));
+    await new Promise<void>((resolve) => client.on("connect", resolve));
+
+    client.write(JSON.stringify({
+      type: "question",
+      agentId: "test-a1b2",
+      tool: "Bash",
+      input: { command: "npm install" },
+    }) + "\n");
+    await new Promise((r) => setTimeout(r, 100));
+
+    expect(questionData).toEqual({ agentId: "test-a1b2", tool: "Bash" });
+    client.destroy();
+  });
+
+  it("should call onTurnComplete when hook sends turn_complete", async () => {
+    let turnAgentId: string | null = null;
+    server = new SocketServer(tmpDir);
+    server.onTurnComplete = (agentId) => {
+      turnAgentId = agentId;
+    };
+    await server.start();
+
+    const client = net.createConnection(path.join(tmpDir, ".orra", "orra.sock"));
+    await new Promise<void>((resolve) => client.on("connect", resolve));
+
+    client.write(JSON.stringify({
+      type: "turn_complete",
+      agentId: "test-a1b2",
+    }) + "\n");
+    await new Promise((r) => setTimeout(r, 100));
+
+    expect(turnAgentId).toBe("test-a1b2");
+    client.destroy();
+  });
+
+  it("should send answer to hook socket via answerQuestion", async () => {
+    let hookSocket: net.Socket | null = null;
+    server = new SocketServer(tmpDir);
+    server.onQuestion = (socket) => {
+      hookSocket = socket;
+    };
+    await server.start();
+
+    const received: string[] = [];
+    const client = net.createConnection(path.join(tmpDir, ".orra", "orra.sock"));
+    await new Promise<void>((resolve) => client.on("connect", resolve));
+    client.on("data", (data) => received.push(data.toString()));
+
+    client.write(JSON.stringify({
+      type: "question",
+      agentId: "test-a1b2",
+      tool: "Bash",
+      input: { command: "npm install" },
+    }) + "\n");
+    await new Promise((r) => setTimeout(r, 100));
+
+    server.answerQuestion(hookSocket!, true);
+    await new Promise((r) => setTimeout(r, 100));
+
+    const parsed = JSON.parse(received[received.length - 1].trim());
+    expect(parsed).toEqual({ type: "answer", allow: true });
+    client.destroy();
+  });
+
   it("should report if agent is connected", async () => {
     server = new SocketServer(tmpDir);
     server.onRegister = () => "conn-test-id";
