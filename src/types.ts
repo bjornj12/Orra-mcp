@@ -4,6 +4,8 @@ export type OrraMode = "orchestrator" | "agent";
 
 export const AgentStatus = z.enum([
   "running",
+  "idle",
+  "waiting",
   "completed",
   "failed",
   "interrupted",
@@ -94,6 +96,24 @@ const StopMessage = z.object({
   reason: z.string(),
 });
 
+const QuestionMessage = z.object({
+  type: z.literal("question"),
+  agentId: z.string(),
+  tool: z.string(),
+  input: z.record(z.string(), z.unknown()),
+});
+
+const TurnCompleteMessage = z.object({
+  type: z.literal("turn_complete"),
+  agentId: z.string(),
+});
+
+const AnswerMessage = z.object({
+  type: z.literal("answer"),
+  allow: z.boolean(),
+  reason: z.string().optional(),
+});
+
 export const SocketMessageSchema = z.discriminatedUnion("type", [
   RegisterMessage,
   OutputMessage,
@@ -101,5 +121,8 @@ export const SocketMessageSchema = z.discriminatedUnion("type", [
   RegisteredMessage,
   MessageMessage,
   StopMessage,
+  QuestionMessage,
+  TurnCompleteMessage,
+  AnswerMessage,
 ]);
 export type SocketMessage = z.infer<typeof SocketMessageSchema>;
