@@ -1,27 +1,25 @@
 # Orra MCP
 
-An MCP server that turns any Claude Code terminal into a multi-agent orchestrator. No app, no GUI — your terminal is the command center.
+Run multiple Claude Code agents in parallel. Monitor all of them from one terminal.
 
-Spawn agents that work in isolated git worktrees, register existing terminals as agents, monitor everything from one place, and chain agents together so they hand off work automatically.
+### The problem
+
+You have 3 agents working in 3 worktrees. One is waiting for permission. One finished 10 minutes ago. One is asking you a question. You don't know any of this because you're alt-tabbing between terminals, losing track of who needs what.
+
+### The fix
 
 ```
-Your Terminal (Claude Code)
-    ↕ stdio MCP
-orra-mcp server (orchestrator mode)
-    ├── orra_spawn          → create worktree + start claude
-    ├── orra_list           → all agents with status + previews
-    ├── orra_status         → one agent's state + recent output
-    ├── orra_output         → full/tail of agent's stream
-    ├── orra_stop           → kill process + optional cleanup
-    ├── orra_message        → send input to agent (answers questions too)
-    ├── orra_link           → when A finishes, auto-spawn B
-    └── orra_install_hooks  → set up automatic input detection
-         ↓
-    Agent processes
-    ├── Spawned: claude in worktrees/auth-refactor/
-    ├── Spawned: claude in worktrees/fix-billing/
-    └── External: your other terminal, registered via orra_register
+You (one terminal): "what's happening?"
+
+  auth-agent      ⏳ waiting  "Allow Bash: npm install?"
+  billing-agent   ✅ done     Finished — reviewer auto-spawned
+  test-agent      💬 idle     "Which approach? A) mock B) real DB C) both"
+
+You: "message auth-agent: yes"
+You: "message test-agent: C"
 ```
+
+One terminal. Full visibility. You only engage when someone needs you.
 
 ## Quick Start
 
