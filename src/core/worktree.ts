@@ -54,6 +54,31 @@ export class WorktreeManager {
     }
   }
 
+  async findByBranch(branch: string): Promise<{ worktreePath: string } | null> {
+    try {
+      const { stdout } = await execFileAsync("git", ["worktree", "list", "--porcelain"], {
+        cwd: this.projectRoot,
+      });
+
+      const worktrees = stdout.split("\n\n");
+      for (const wt of worktrees) {
+        const lines = wt.trim().split("\n");
+        const worktreeLine = lines.find((l) => l.startsWith("worktree "));
+        const branchLine = lines.find((l) => l.startsWith("branch "));
+        if (worktreeLine && branchLine) {
+          const wtPath = worktreeLine.replace("worktree ", "");
+          const wtBranch = branchLine.replace("branch refs/heads/", "");
+          if (wtBranch === branch) {
+            return { worktreePath: wtPath };
+          }
+        }
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  }
+
   async isBranchMerged(branch: string): Promise<boolean> {
     try {
       const { stdout } = await execFileAsync(
