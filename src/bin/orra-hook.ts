@@ -41,6 +41,29 @@ function findProjectRoot(startDir: string): string {
   return startDir;
 }
 
+function findMainRepoRoot(worktreeRoot: string): string {
+  // In a worktree, .git is a file containing "gitdir: /path/to/main/.git/worktrees/name"
+  // In the main repo, .git is a directory
+  const gitPath = path.join(worktreeRoot, ".git");
+  try {
+    const stat = fs.statSync(gitPath);
+    if (stat.isDirectory()) {
+      return worktreeRoot; // Already in main repo
+    }
+    // It's a file — parse the gitdir path to find main repo
+    const content = fs.readFileSync(gitPath, "utf-8").trim();
+    // Format: "gitdir: /path/to/main-repo/.git/worktrees/worktree-name"
+    const match = content.match(/^gitdir:\s*(.+)$/);
+    if (match) {
+      const gitdir = match[1];
+      // Walk up from .git/worktrees/name to .git to repo root
+      const dotGit = path.resolve(worktreeRoot, gitdir, "..", "..");
+      return path.dirname(dotGit);
+    }
+  } catch {}
+  return worktreeRoot;
+}
+
 async function readStdin(): Promise<string> {
   const chunks: Buffer[] = [];
   for await (const chunk of process.stdin) {
@@ -171,9 +194,11 @@ async function main(): Promise<void> {
 
   const hookEvent = hookInput.hook_event_name as string;
   const cwd = (hookInput.cwd as string) ?? process.cwd();
-  const projectRoot = findProjectRoot(cwd);
-  const sockPath = path.join(projectRoot, ".orra", "orra.sock");
-  const agentId = resolveAgentId(process.env, projectRoot);
+  const worktreeRoot = findProjectRoot(cwd);
+  const mainRepoRoot = findMainRepoRoot(worktreeRoot);
+  // Socket is in the main repo's .orra/, agent ID is in the worktree's .orra/
+  const sockPath = path.join(mainRepoRoot, ".orra", "orra.sock");
+  const agentId = resolveAgentId(process.env, worktreeRoot);
 
   if (!agentId) {
     process.exit(1);
