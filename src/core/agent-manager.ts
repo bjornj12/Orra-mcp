@@ -106,19 +106,34 @@ export class AgentManager {
       return this.spawnWithCustomCommand(agentId, options, config.spawnCommand);
     }
 
-    const { branch, worktreePath } = await this.worktrees.create(
-      agentId,
-      options.branch
-    );
+    // Use existing worktree if branch already has one, otherwise create new
+    let branch: string;
+    let worktreePath: string;
 
-    // Write .claude/settings.json with hooks in the worktree
+    if (options.branch) {
+      const existing = await this.worktrees.findByBranch(options.branch);
+      if (existing) {
+        branch = options.branch;
+        worktreePath = existing.worktreePath;
+      } else {
+        const created = await this.worktrees.create(agentId, options.branch);
+        branch = created.branch;
+        worktreePath = created.worktreePath;
+      }
+    } else {
+      const created = await this.worktrees.create(agentId);
+      branch = created.branch;
+      worktreePath = created.worktreePath;
+    }
+
+    // Install hooks in the worktree
     try {
       const currentDir = path.dirname(fileURLToPath(import.meta.url));
       const hookScriptPath = path.join(currentDir, "..", "bin", "orra-hook.js");
       const claudeSettingsDir = path.join(worktreePath, ".claude");
       await fsp.mkdir(claudeSettingsDir, { recursive: true });
       await fsp.writeFile(
-        path.join(claudeSettingsDir, "settings.json"),
+        path.join(claudeSettingsDir, "settings.local.json"),
         JSON.stringify({
           hooks: {
             PermissionRequest: [{
@@ -142,7 +157,7 @@ export class AgentManager {
       type: "spawned",
       task: options.task,
       branch,
-      worktree: `worktrees/${agentId}`,
+      worktree: worktreePath,
       pid: 0,
       status: "running",
       createdAt: now,
@@ -156,8 +171,6 @@ export class AgentManager {
       this.state.appendLog(agentId, chunk).catch(() => {});
     });
 
-    // Interactive mode — no --print. The agent runs as a full interactive session
-    // in a PTY, enabling send_message to inject input via stdin.
     const claudeArgs = this.buildClaudeArgs(options);
 
     const managed = this.processes.spawn({
@@ -180,7 +193,7 @@ export class AgentManager {
     return {
       agentId,
       branch,
-      worktree: `worktrees/${agentId}`,
+      worktree: worktreePath,
     };
   }
 
