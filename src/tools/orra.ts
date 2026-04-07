@@ -13,6 +13,7 @@ export const orraSchema = z.object({
   action: z.enum([
     "spawn",
     "list",
+    "wait",
     "status",
     "output",
     "stop",
@@ -26,6 +27,9 @@ export const orraSchema = z.object({
   branch: z.string().optional().describe("Branch name (spawn, link.to)"),
   model: z.string().optional().describe("Model override (spawn, link.to)"),
   allowedTools: z.array(z.string()).optional().describe("Tool restrictions (spawn)"),
+
+  // wait
+  timeout: z.number().optional().describe("Max seconds to wait (wait, default: 120)"),
 
   // status, output, stop, message, takeover
   agentId: z.string().optional().describe("Target agent ID"),
@@ -67,6 +71,54 @@ export async function handleOrra(
 
     case "list":
       return handleListAgents(manager);
+
+    case "wait": {
+      const timeoutMs = (args.timeout ?? 120) * 1000;
+      const startTime = Date.now();
+      const initialAgents = await manager.listAgents();
+      const initialStates = new Map(initialAgents.map(a => [a.id, a.status]));
+
+      // Poll every 2 seconds for state changes
+      while (Date.now() - startTime < timeoutMs) {
+        await new Promise(r => setTimeout(r, 2000));
+        const current = await manager.listAgents();
+
+        const changes: Array<{ id: string; task: string; from: string; to: string }> = [];
+        for (const agent of current) {
+          const prev = initialStates.get(agent.id);
+          if (prev && prev !== agent.status) {
+            changes.push({ id: agent.id, task: agent.task, from: prev, to: agent.status });
+          }
+          if (!prev && agent.status !== "running") {
+            // New agent that already finished
+            changes.push({ id: agent.id, task: agent.task, from: "new", to: agent.status });
+          }
+        }
+
+        if (changes.length > 0) {
+          const summary = current.map(a => ({ id: a.id, task: a.task, status: a.status }));
+          return {
+            content: [{
+              type: "text" as const,
+              text: JSON.stringify({ changes, allAgents: summary }, null, 2),
+            }],
+          };
+        }
+      }
+
+      // Timeout — return current state anyway
+      const final = await manager.listAgents();
+      return {
+        content: [{
+          type: "text" as const,
+          text: JSON.stringify({
+            timeout: true,
+            message: `No state changes in ${args.timeout ?? 120}s`,
+            allAgents: final.map(a => ({ id: a.id, task: a.task, status: a.status })),
+          }, null, 2),
+        }],
+      };
+    }
 
     case "status": {
       if (!args.agentId) return error("'agentId' is required for status");

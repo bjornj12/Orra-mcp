@@ -26,7 +26,10 @@ export async function handleSpawnAgent(
     content: [
       {
         type: "text" as const,
-        text: JSON.stringify(result, null, 2),
+        text: JSON.stringify(result, null, 2) +
+          "\n\nAgent is now running. Use orra({ action: \"list\" }) to check status. " +
+          "Agents update to 'completed', 'failed', or 'idle' (needs input) when their state changes. " +
+          "Poll periodically or after a reasonable wait.",
       },
     ],
   };
