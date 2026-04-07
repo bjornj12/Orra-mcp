@@ -126,6 +126,15 @@ export class AgentManager {
       worktreePath = created.worktreePath;
     }
 
+    // Write agent ID file so hooks can identify this agent
+    try {
+      const orraAgentsDir = path.join(worktreePath, ".orra", "agents");
+      await fsp.mkdir(orraAgentsDir, { recursive: true });
+      await fsp.writeFile(path.join(orraAgentsDir, "self.id"), agentId);
+    } catch {
+      // Non-fatal
+    }
+
     // Install hooks in the worktree
     try {
       const currentDir = path.dirname(fileURLToPath(import.meta.url));
