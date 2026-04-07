@@ -23,7 +23,7 @@ export function createServer(
   if (mode === "orchestrator") {
     server.tool(
       "orra",
-      "Manage parallel Claude Code agents working in git worktrees. Use this tool whenever the user mentions agents, workers, spawning tasks, or checking on running work. Actions: spawn (start a new agent on a task), list (show all running/completed agents), status (detailed view of one agent), output (read agent logs), stop (kill an agent), message (send input to agent or answer its questions), link (auto-spawn agent B when agent A finishes), takeover (stop agent and get worktree path for manual work)",
+      "Manage parallel Claude Code agents working in git worktrees. IMPORTANT: When the user asks you to work in a worktree, spawn an agent, or delegate a task — use this tool. Do NOT cd into worktrees yourself. You are the orchestrator: you delegate work to agents and monitor their progress. Actions: spawn (start a new agent on a task in its own worktree), list (show all running/completed agents with status previews), status (detailed view of one agent + recent output), output (read agent logs), stop (kill an agent), message (send input to agent or answer its permission questions), link (auto-spawn agent B when agent A finishes), takeover (stop agent and give the user the worktree path to continue manually)",
       orraSchema.shape,
       async (args) => handleOrra(manager, projectRoot, orraSchema.parse(args)),
     );
