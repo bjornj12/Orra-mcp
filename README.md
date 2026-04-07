@@ -36,11 +36,21 @@ Or without global install:
 claude mcp add orra -- npx orra-mcp
 ```
 
-### 2. Restart Claude Code
+### 2. Add instructions to your project
+
+Copy the Orra instructions into your project's CLAUDE.md (or append to an existing one):
+
+```bash
+curl -sL https://raw.githubusercontent.com/bjornj12/Orra-mcp/main/CLAUDE.template.md >> your-project/CLAUDE.md
+```
+
+This tells Claude to use `orra` for agent management instead of doing work directly. Without this, Claude may cd into worktrees and do the work itself instead of delegating.
+
+### 3. Restart Claude Code
 
 Start a new Claude Code session. Orra detects it's the first terminal and runs in **orchestrator mode** with all management tools.
 
-### 3. Spawn your first agent
+### 4. Spawn your first agent
 
 ```
 You: "spawn an agent to add input validation to the API"
@@ -48,7 +58,7 @@ You: "spawn an agent to add input validation to the API"
 
 Orra creates a git worktree, launches a Claude Code session in it, and the agent starts working on its own branch. You stay in your terminal, orchestrating.
 
-### 4. Monitor and interact
+### 5. Monitor and interact
 
 ```
 You: "what agents are running?"        → orra_list
@@ -56,7 +66,7 @@ You: "how's the validation agent?"     → orra_status
 You: "tell it to also check email format" → orra_message
 ```
 
-### 5. Chain agents
+### 6. Chain agents
 
 ```
 You: "when the validation agent finishes, spawn a reviewer"
