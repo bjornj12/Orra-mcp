@@ -13,6 +13,7 @@ export interface SpawnAgentOptions {
   task: string;
   branch?: string;
   model?: string;
+  agent?: string;
   allowedTools?: string[];
 }
 
@@ -345,13 +346,9 @@ export class AgentManager {
     // interactive session, enabling send_message to inject further input.
     const args: string[] = [];
 
-    if (options.model) {
-      args.push("--model", options.model);
-    }
-
-    if (options.allowedTools && options.allowedTools.length > 0) {
-      args.push("--allowedTools", options.allowedTools.join(","));
-    }
+    if (options.agent) args.push("--agent", options.agent);
+    if (options.model) args.push("--model", options.model);
+    if (options.allowedTools?.length) args.push("--allowedTools", options.allowedTools.join(","));
 
     return args;
   }
