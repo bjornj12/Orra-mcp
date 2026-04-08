@@ -36,12 +36,8 @@ export async function handleOrraSetup(projectRoot: string) {
 
   const orchestratorSrc = path.join(currentDir, "..", "templates", "orchestrator.md");
   const orchestratorDest = path.join(agentsDir, "orchestrator.md");
-  if (!fs.existsSync(orchestratorDest)) {
-    await fsp.copyFile(orchestratorSrc, orchestratorDest);
-    results.push("Created .claude/agents/orchestrator.md");
-  } else {
-    results.push(".claude/agents/orchestrator.md already exists — skipped");
-  }
+  await fsp.copyFile(orchestratorSrc, orchestratorDest);
+  results.push(fs.existsSync(orchestratorDest) ? "Updated .claude/agents/orchestrator.md" : "Created .claude/agents/orchestrator.md");
 
   // 3. Add .orra/ to .gitignore
   const gitignorePath = path.join(projectRoot, ".gitignore");
