@@ -2,11 +2,9 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { AgentManager } from "./core/agent-manager.js";
 import { orraSchema, handleOrra } from "./tools/orra.js";
 import { handleInstallHooks } from "./tools/install-hooks.js";
-import type { OrraMode } from "./types.js";
 
 export function createServer(
-  projectRoot: string,
-  _mode: OrraMode
+  projectRoot: string
 ): {
   server: McpServer;
   manager: AgentManager;

@@ -36,14 +36,6 @@ describe("StateManager", () => {
       });
     });
 
-    it("should create empty links.json if missing", async () => {
-      await state.init();
-      const links = JSON.parse(
-        fs.readFileSync(path.join(tmpDir, ".orra", "links.json"), "utf-8")
-      );
-      expect(links).toEqual([]);
-    });
-
     it("should not overwrite existing config", async () => {
       const orraDir = path.join(tmpDir, ".orra");
       fs.mkdirSync(orraDir, { recursive: true });
@@ -145,27 +137,6 @@ describe("StateManager", () => {
       await state.appendLog("test-a1b2", "line 1\nline 2\nline 3\nline 4\nline 5\n");
       const tail = await state.readLog("test-a1b2", 2);
       expect(tail).toBe("line 4\nline 5");
-    });
-  });
-
-  describe("links", () => {
-    beforeEach(async () => {
-      await state.init();
-    });
-
-    it("should save and load links", async () => {
-      const link = {
-        id: "link-x1y2",
-        from: "agent-1",
-        to: { task: "review" },
-        on: "success" as const,
-        status: "pending" as const,
-        firedAgentId: null,
-        createdAt: "2026-04-06T14:35:00.000Z",
-      };
-      await state.saveLinks([link]);
-      const links = await state.loadLinks();
-      expect(links).toEqual([link]);
     });
   });
 
