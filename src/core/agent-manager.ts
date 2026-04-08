@@ -6,9 +6,8 @@ import { StateManager } from "./state.js";
 import { WorktreeManager, slugify } from "./worktree.js";
 import { ProcessManager, type ManagedProcess } from "./process.js";
 import { StreamParser } from "./stream-parser.js";
-import { Linker, expandTemplate } from "./linker.js";
 import { parseAllowDeny } from "../bin/orra-hook.js";
-import type { AgentState, Link, LinkTo, LinkTrigger } from "../types.js";
+import type { AgentState } from "../types.js";
 
 export interface SpawnAgentOptions {
   task: string;
@@ -30,18 +29,10 @@ export interface StopResult {
   warning?: string;
 }
 
-export interface LinkResult {
-  linkId: string;
-  from: string;
-  on: LinkTrigger;
-  status: string;
-}
-
 export class AgentManager {
   private state: StateManager;
   private worktrees: WorktreeManager;
   private processes: ProcessManager;
-  private linker: Linker;
   private runningProcesses: Map<string, ManagedProcess> = new Map();
   private killedAgents: Set<string> = new Set();
   private pendingQuestions: Map<string, { tool: string; input: Record<string, unknown> }> = new Map();
@@ -52,13 +43,10 @@ export class AgentManager {
     this.state = new StateManager(projectRoot);
     this.worktrees = new WorktreeManager(projectRoot);
     this.processes = new ProcessManager();
-    this.linker = new Linker();
   }
 
   async init(): Promise<void> {
     await this.state.init();
-    const links = await this.state.loadLinks();
-    this.linker.loadLinks(links);
     await this.state.reconcile();
   }
 
@@ -351,31 +339,6 @@ export class AgentManager {
     proc.write(message + "\n");
   }
 
-  async linkAgents(
-    from: string,
-    to: LinkTo,
-    on: LinkTrigger
-  ): Promise<LinkResult> {
-    const fromAgent = await this.state.loadAgent(from);
-    if (!fromAgent) throw new Error(`Agent ${from} not found`);
-
-    const link = this.linker.createLink(from, to, on);
-    await this.state.saveLinks(this.linker.getAllLinks());
-
-    // Check if the agent already completed and the condition matches
-    if (fromAgent.status === "completed" || fromAgent.status === "failed") {
-      const exitCode =
-        fromAgent.exitCode ?? (fromAgent.status === "completed" ? 0 : 1);
-      const matches = this.linker.findMatchingLinks(from, exitCode);
-      if (matches.some((m) => m.id === link.id)) {
-        await this.fireLink(link, fromAgent);
-        return { linkId: link.id, from, on, status: "fired" };
-      }
-    }
-
-    return { linkId: link.id, from, on, status: "pending" };
-  }
-
   private buildClaudeArgs(options: SpawnAgentOptions): string[] {
     // Interactive mode — no flags that would make claude non-interactive.
     // The task is written to stdin after spawn so claude runs as a full
@@ -393,17 +356,9 @@ export class AgentManager {
     return args;
   }
 
-  private async handleAgentExit(
-    agentId: string,
-    exitCode: number
-  ): Promise<void> {
+  private async handleAgentExit(agentId: string, exitCode: number): Promise<void> {
     this.runningProcesses.delete(agentId);
-
-    // If agent was intentionally killed, let stopAgent handle the state update.
-    // Don't evaluate links for killed agents.
-    if (this.killedAgents.has(agentId)) {
-      return;
-    }
+    if (this.killedAgents.has(agentId)) return;
 
     const agent = await this.state.loadAgent(agentId);
     if (!agent) return;
@@ -412,38 +367,9 @@ export class AgentManager {
     agent.exitCode = exitCode;
     agent.updatedAt = new Date().toISOString();
     await this.state.saveAgent(agent);
-
-    // Check for matching links
-    const matchingLinks = this.linker.findMatchingLinks(agentId, exitCode);
-    this.linker.evaluateAndExpire(agentId, exitCode);
-    await this.state.saveLinks(this.linker.getAllLinks());
-
-    for (const link of matchingLinks) {
-      await this.fireLink(link, agent);
-    }
   }
 
   async shutdown(): Promise<void> {
     // No-op for now
-  }
-
-  private async fireLink(link: Link, fromAgent: AgentState): Promise<void> {
-    const expandedTask = expandTemplate(link.to.task, fromAgent);
-    const expandedBranch = link.to.branch
-      ? expandTemplate(link.to.branch, fromAgent)
-      : undefined;
-
-    try {
-      const result = await this.spawnAgent({
-        task: expandedTask,
-        branch: expandedBranch,
-        model: link.to.model,
-      });
-      this.linker.markFired(link.id, result.agentId);
-      await this.state.saveLinks(this.linker.getAllLinks());
-    } catch (err) {
-      // Log but don't throw — the link failing shouldn't crash the exit handler
-      console.error(`Failed to fire link ${link.id}:`, err);
-    }
   }
 }

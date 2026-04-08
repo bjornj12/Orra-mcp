@@ -63,9 +63,4 @@ describe("Agent Lifecycle (integration)", () => {
     );
   });
 
-  it("should throw when linking from non-existent agent", async () => {
-    await expect(
-      manager.linkAgents("nonexistent", { task: "review" }, "success")
-    ).rejects.toThrow("not found");
-  });
 });
