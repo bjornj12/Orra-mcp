@@ -6,7 +6,6 @@ import { handleGetAgentStatus } from "./get-agent-status.js";
 import { handleGetAgentOutput } from "./get-agent-output.js";
 import { handleStopAgent } from "./stop-agent.js";
 import { handleSendMessage } from "./send-message.js";
-import { handleLinkAgents } from "./link-agents.js";
 import { handleTakeover } from "./takeover.js";
 
 export const orraSchema = z.object({
@@ -17,7 +16,6 @@ export const orraSchema = z.object({
     "output",
     "stop",
     "message",
-    "link",
     "takeover",
   ]).describe("The action to perform"),
 
@@ -39,14 +37,6 @@ export const orraSchema = z.object({
   // message
   message: z.string().optional().describe("Message to send (message)"),
 
-  // link
-  from: z.string().optional().describe("Source agent ID (link)"),
-  to: z.object({
-    task: z.string(),
-    branch: z.string().optional(),
-    model: z.string().optional(),
-  }).optional().describe("Target agent config (link)"),
-  on: z.enum(["success", "failure", "any"]).optional().describe("Trigger condition (link)"),
 });
 
 export async function handleOrra(
@@ -87,13 +77,6 @@ export async function handleOrra(
       if (!args.agentId) return error("'agentId' is required for message");
       if (!args.message) return error("'message' is required for message");
       return handleSendMessage(manager, { agentId: args.agentId, message: args.message });
-    }
-
-    case "link": {
-      if (!args.from) return error("'from' is required for link");
-      if (!args.to) return error("'to' is required for link");
-      if (!args.on) return error("'on' is required for link");
-      return handleLinkAgents(manager, { from: args.from, to: args.to, on: args.on });
     }
 
     case "takeover": {
