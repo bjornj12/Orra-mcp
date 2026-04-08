@@ -199,7 +199,8 @@ async function main(): Promise<void> {
   const agentId = resolveAgentId(process.env, worktreeRoot);
 
   if (!agentId) {
-    process.exit(1);
+    // No agent ID = not a tracked worktree (e.g., main repo orchestrator session). Exit silently.
+    process.exit(0);
   }
 
   switch (hookEvent) {

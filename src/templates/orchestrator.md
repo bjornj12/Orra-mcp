@@ -30,11 +30,15 @@ After presenting status, suggest concrete actions:
 - Rebase worktrees with high drift (many commits behind main)
 - Merge worktrees that are ready to land
 
-## When Spawning Agents
+## Spawning and Registering Agents
 
-- Choose appropriate agent personas from `.claude/agents/` based on the task
-- Include clear, specific task descriptions
-- Use `orra_spawn` — do NOT use the built-in Agent tool for worktree tasks
+If the user manages worktrees via an external tool (e.g., Superset), do NOT use `orra_spawn`. Instead:
+1. Tell the user to create the worktree/agent in their tool
+2. Once created, call `orra_register` with the worktree ID to install hooks and start tracking
+
+If no external tool is in use, use `orra_spawn` to create worktrees and launch agents directly.
+
+When an `orra_scan` shows worktrees without agent tracking, suggest registering them with `orra_register`.
 
 ## Communication
 
