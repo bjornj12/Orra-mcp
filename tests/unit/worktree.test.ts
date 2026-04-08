@@ -87,4 +87,48 @@ describe("WorktreeManager", () => {
     await wt.create("test-a1b2");
     await expect(wt.create("test-a1b2")).rejects.toThrow();
   });
+
+  describe("rebase", () => {
+    it("should successfully rebase branch onto main when no conflicts", async () => {
+      // Create worktree from initial commit
+      const result = await wt.create("test-rebase-ok");
+
+      // Make a new commit on main
+      fs.writeFileSync(path.join(tmpDir, "main-file.txt"), "main content");
+      execSync("git add main-file.txt && git commit -m 'main commit'", { cwd: tmpDir });
+
+      // Make a commit on the worktree branch (different file)
+      fs.writeFileSync(path.join(result.worktreePath, "branch-file.txt"), "branch content");
+      execSync("git add branch-file.txt && git commit -m 'branch commit'", { cwd: result.worktreePath });
+
+      const rebaseResult = await wt.rebase("test-rebase-ok");
+
+      expect(rebaseResult.success).toBe(true);
+      expect(rebaseResult.conflicts).toEqual([]);
+
+      // Both commits should be in the branch history
+      const log = execSync("git log --oneline", { cwd: result.worktreePath }).toString();
+      expect(log).toContain("main commit");
+      expect(log).toContain("branch commit");
+    });
+
+    it("should detect conflicts and return conflicting files", async () => {
+      // Create worktree from initial commit
+      const result = await wt.create("test-rebase-conflict");
+
+      // Make a commit on main that modifies a file
+      fs.writeFileSync(path.join(tmpDir, "shared.txt"), "main version");
+      execSync("git add shared.txt && git commit -m 'main modifies shared'", { cwd: tmpDir });
+
+      // Rewind the worktree branch to before that commit, then make its own change
+      // The worktree was created from the initial empty commit, so we add the same file with different content
+      fs.writeFileSync(path.join(result.worktreePath, "shared.txt"), "branch version");
+      execSync("git add shared.txt && git commit -m 'branch modifies shared'", { cwd: result.worktreePath });
+
+      const rebaseResult = await wt.rebase("test-rebase-conflict");
+
+      expect(rebaseResult.success).toBe(false);
+      expect(rebaseResult.conflicts).toContain("shared.txt");
+    });
+  });
 });

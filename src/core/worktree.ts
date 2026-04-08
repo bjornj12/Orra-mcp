@@ -91,4 +91,48 @@ export class WorktreeManager {
       return false;
     }
   }
+
+  async rebase(agentId: string): Promise<{ success: boolean; conflicts: string[] }> {
+    const worktreePath = path.join(this.projectRoot, "worktrees", agentId);
+
+    // Fetch latest main (may fail if no remote — that's OK)
+    try {
+      await execFileAsync("git", ["-C", this.projectRoot, "fetch", "origin", "main"], { timeout: 30000 });
+    } catch {
+      // Fetch may fail if no remote — continue with local main
+    }
+
+    // Attempt rebase
+    try {
+      const mainBranch = await this.getMainBranch();
+      await execFileAsync("git", ["-C", worktreePath, "rebase", mainBranch]);
+      return { success: true, conflicts: [] };
+    } catch {
+      // Rebase failed — check for conflicts
+      const conflicts: string[] = [];
+      try {
+        const { stdout } = await execFileAsync("git", ["-C", worktreePath, "diff", "--name-only", "--diff-filter=U"]);
+        conflicts.push(...stdout.trim().split("\n").filter(Boolean));
+      } catch {}
+
+      // Abort the failed rebase
+      try {
+        await execFileAsync("git", ["-C", worktreePath, "rebase", "--abort"]);
+      } catch {}
+
+      return { success: false, conflicts };
+    }
+  }
+
+  private async getMainBranch(): Promise<string> {
+    try {
+      await execFileAsync("git", ["-C", this.projectRoot, "rev-parse", "--verify", "main"], { timeout: 3000 });
+      return "main";
+    } catch {}
+    try {
+      await execFileAsync("git", ["-C", this.projectRoot, "rev-parse", "--verify", "master"], { timeout: 3000 });
+      return "master";
+    } catch {}
+    return "main";
+  }
 }
