@@ -5,7 +5,8 @@
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "orra-mcp": "dist/index.js"
+    "orra-mcp": "dist/index.js",
+    "orra-setup": "dist/bin/setup.js"
   },
   "files": [
     "dist",
@@ -13,7 +14,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && mkdir -p dist/templates && cp src/templates/orchestrator.md dist/templates/orchestrator.md",
     "dev": "tsc --watch",
     "test": "vitest run",
     "test:watch": "vitest",
