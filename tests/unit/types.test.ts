@@ -8,10 +8,22 @@ import {
   LinkStatus,
   LinkTrigger,
   SocketMessageSchema,
+  ConfigV2Schema,
+  GitStateSchema,
+  PrStateSchema,
+  WorktreeStatusSchema,
+  AgentStateV2Schema,
+  ScanResultSchema,
   type AgentState,
   type Link,
   type Config,
   type SocketMessage,
+  type ConfigV2,
+  type GitState,
+  type PrState,
+  type WorktreeStatus,
+  type AgentStateV2,
+  type ScanResult,
 } from "../../src/types.js";
 
 describe("AgentStateSchema", () => {
@@ -235,5 +247,271 @@ describe("SocketMessageSchema", () => {
   it("should validate stop message", () => {
     const msg = { type: "stop", reason: "user requested" };
     expect(SocketMessageSchema.parse(msg).type).toBe("stop");
+  });
+});
+
+describe("v2 types", () => {
+  describe("ConfigV2Schema", () => {
+    it("should validate a full config", () => {
+      const config: ConfigV2 = {
+        markers: ["spec.md", "PLAN.md"],
+        staleDays: 7,
+        worktreeDir: "worktrees",
+        driftThreshold: 50,
+        defaultModel: "sonnet",
+        defaultAgent: "my-agent",
+      };
+      expect(ConfigV2Schema.parse(config)).toEqual(config);
+    });
+
+    it("should apply defaults when fields are omitted", () => {
+      const parsed = ConfigV2Schema.parse({});
+      expect(parsed.markers).toEqual(["spec.md", "PRD.md", "PLAN.md", "CHANGELOG.md"]);
+      expect(parsed.staleDays).toBe(3);
+      expect(parsed.worktreeDir).toBe("worktrees");
+      expect(parsed.driftThreshold).toBe(20);
+      expect(parsed.defaultModel).toBeNull();
+      expect(parsed.defaultAgent).toBeNull();
+    });
+
+    it("should accept null for defaultModel and defaultAgent", () => {
+      const config = {
+        markers: ["spec.md"],
+        staleDays: 5,
+        worktreeDir: "wt",
+        driftThreshold: 10,
+        defaultModel: null,
+        defaultAgent: null,
+      };
+      const parsed = ConfigV2Schema.parse(config);
+      expect(parsed.defaultModel).toBeNull();
+      expect(parsed.defaultAgent).toBeNull();
+    });
+  });
+
+  describe("GitStateSchema", () => {
+    it("should validate a valid git state", () => {
+      const git: GitState = {
+        ahead: 2,
+        behind: 0,
+        uncommitted: 3,
+        lastCommit: "feat: add v2 types",
+        diffStat: "3 files changed, 120 insertions(+), 5 deletions(-)",
+      };
+      expect(GitStateSchema.parse(git)).toEqual(git);
+    });
+
+    it("should reject missing required fields", () => {
+      expect(() => GitStateSchema.parse({ ahead: 0, behind: 0 })).toThrow();
+    });
+  });
+
+  describe("PrStateSchema", () => {
+    it("should validate a valid PR state", () => {
+      const pr: PrState = {
+        number: 42,
+        state: "open",
+        reviews: "approved",
+        ci: "passing",
+        mergeable: true,
+      };
+      expect(PrStateSchema.parse(pr)).toEqual(pr);
+    });
+
+    it("should validate a non-mergeable PR", () => {
+      const pr: PrState = {
+        number: 7,
+        state: "open",
+        reviews: "changes_requested",
+        ci: "failing",
+        mergeable: false,
+      };
+      expect(PrStateSchema.parse(pr)).toEqual(pr);
+    });
+  });
+
+  describe("WorktreeStatusSchema", () => {
+    it("should accept all valid statuses", () => {
+      const validStatuses: WorktreeStatus[] = [
+        "ready_to_land",
+        "needs_attention",
+        "in_progress",
+        "idle",
+        "stale",
+      ];
+      for (const status of validStatuses) {
+        expect(WorktreeStatusSchema.parse(status)).toBe(status);
+      }
+    });
+
+    it("should reject an invalid status", () => {
+      expect(() => WorktreeStatusSchema.parse("unknown")).toThrow();
+      expect(() => WorktreeStatusSchema.parse("done")).toThrow();
+    });
+  });
+
+  describe("AgentStateV2Schema", () => {
+    it("should validate with pendingQuestion null", () => {
+      const agent: AgentStateV2 = {
+        id: "test-a1b2",
+        task: "Refactor cache layer",
+        branch: "orra/refactor-cache-a1b2",
+        worktree: "worktrees/refactor-cache-a1b2",
+        pid: 12345,
+        status: "running",
+        agentPersona: null,
+        model: "sonnet",
+        createdAt: "2026-04-08T10:00:00.000Z",
+        updatedAt: "2026-04-08T10:05:00.000Z",
+        exitCode: null,
+        pendingQuestion: null,
+      };
+      expect(AgentStateV2Schema.parse(agent)).toEqual(agent);
+    });
+
+    it("should validate with a pendingQuestion object", () => {
+      const agent: AgentStateV2 = {
+        id: "test-b3c4",
+        task: "Write tests",
+        branch: "orra/write-tests-b3c4",
+        worktree: "worktrees/write-tests-b3c4",
+        pid: 99999,
+        status: "waiting",
+        agentPersona: "tester",
+        model: null,
+        createdAt: "2026-04-08T11:00:00.000Z",
+        updatedAt: "2026-04-08T11:02:00.000Z",
+        exitCode: null,
+        pendingQuestion: {
+          tool: "Bash",
+          input: { command: "npm test" },
+        },
+      };
+      const parsed = AgentStateV2Schema.parse(agent);
+      expect(parsed.pendingQuestion).toEqual({ tool: "Bash", input: { command: "npm test" } });
+    });
+
+    it("should reject invalid status", () => {
+      expect(() =>
+        AgentStateV2Schema.parse({
+          id: "x",
+          task: "t",
+          branch: "b",
+          worktree: "w",
+          pid: 1,
+          status: "invalid_status",
+          agentPersona: null,
+          model: null,
+          createdAt: "2026-04-08T10:00:00.000Z",
+          updatedAt: "2026-04-08T10:00:00.000Z",
+          exitCode: null,
+          pendingQuestion: null,
+        })
+      ).toThrow();
+    });
+  });
+
+  describe("ScanResultSchema", () => {
+    it("should validate a valid scan result", () => {
+      const result: ScanResult = {
+        worktrees: [
+          {
+            id: "feat-auth-a1b2",
+            path: "/home/user/project/worktrees/feat-auth-a1b2",
+            branch: "feat/auth",
+            status: "in_progress",
+            git: {
+              ahead: 3,
+              behind: 0,
+              uncommitted: 1,
+              lastCommit: "fix: auth token refresh",
+              diffStat: "2 files changed, 30 insertions(+)",
+            },
+            markers: ["spec.md", "PLAN.md"],
+            pr: {
+              number: 15,
+              state: "open",
+              reviews: "pending",
+              ci: "running",
+              mergeable: false,
+            },
+            agent: {
+              id: "feat-auth-a1b2",
+              task: "Implement auth feature",
+              branch: "feat/auth",
+              worktree: "worktrees/feat-auth-a1b2",
+              pid: 55555,
+              status: "running",
+              agentPersona: null,
+              model: "sonnet",
+              createdAt: "2026-04-08T09:00:00.000Z",
+              updatedAt: "2026-04-08T09:30:00.000Z",
+              exitCode: null,
+              pendingQuestion: null,
+            },
+            flags: ["has_pr", "ci_running"],
+          },
+        ],
+        summary: {
+          ready_to_land: 0,
+          needs_attention: 0,
+          in_progress: 1,
+          idle: 0,
+          stale: 0,
+          total: 1,
+        },
+      };
+      expect(ScanResultSchema.parse(result)).toEqual(result);
+    });
+
+    it("should validate a scan result with no worktrees", () => {
+      const result: ScanResult = {
+        worktrees: [],
+        summary: {
+          ready_to_land: 0,
+          needs_attention: 0,
+          in_progress: 0,
+          idle: 0,
+          stale: 0,
+          total: 0,
+        },
+      };
+      expect(ScanResultSchema.parse(result)).toEqual(result);
+    });
+
+    it("should validate worktree entry with null pr and null agent", () => {
+      const result = {
+        worktrees: [
+          {
+            id: "idle-d5e6",
+            path: "/home/user/project/worktrees/idle-d5e6",
+            branch: "chore/cleanup",
+            status: "idle",
+            git: {
+              ahead: 0,
+              behind: 0,
+              uncommitted: 0,
+              lastCommit: "chore: cleanup old files",
+              diffStat: "",
+            },
+            markers: [],
+            pr: null,
+            agent: null,
+            flags: [],
+          },
+        ],
+        summary: {
+          ready_to_land: 0,
+          needs_attention: 0,
+          in_progress: 0,
+          idle: 1,
+          stale: 0,
+          total: 1,
+        },
+      };
+      const parsed = ScanResultSchema.parse(result);
+      expect(parsed.worktrees[0].pr).toBeNull();
+      expect(parsed.worktrees[0].agent).toBeNull();
+    });
   });
 });
