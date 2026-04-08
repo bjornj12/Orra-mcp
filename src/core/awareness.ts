@@ -4,8 +4,8 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import {
   type GitState,
-  type AgentStateV2,
-  AgentStateV2Schema,
+  type AgentState,
+  AgentStateSchema,
   type PrState,
   type WorktreeStatus,
   type WorktreeScanEntry,
@@ -19,7 +19,7 @@ const execFileAsync = promisify(execFile);
 
 export function classify(
   git: GitState,
-  agent: AgentStateV2 | null,
+  agent: AgentState | null,
   pr: PrState | null,
   opts: { staleDays: number; driftThreshold: number }
 ): { status: WorktreeStatus; flags: string[] } {
@@ -171,11 +171,11 @@ function pidIsAlive(pid: number): boolean {
 export async function readAgentState(
   projectRoot: string,
   agentId: string
-): Promise<AgentStateV2 | null> {
+): Promise<AgentState | null> {
   const filePath = path.join(projectRoot, ".orra", "agents", `${agentId}.json`);
   try {
     const data = await fs.readFile(filePath, "utf-8");
-    const agent = AgentStateV2Schema.parse(JSON.parse(data));
+    const agent = AgentStateSchema.parse(JSON.parse(data));
     if (agent.status === "running" && !pidIsAlive(agent.pid)) {
       return { ...agent, status: "interrupted" };
     }

@@ -24,30 +24,9 @@ describe("StateManager", () => {
       expect(fs.existsSync(path.join(tmpDir, ".orra", "agents"))).toBe(true);
     });
 
-    it("should create default config.json if missing", async () => {
+    it("should not create config.json", async () => {
       await state.init();
-      const config = JSON.parse(
-        fs.readFileSync(path.join(tmpDir, ".orra", "config.json"), "utf-8")
-      );
-      expect(config).toEqual({
-        defaultModel: null,
-        defaultAllowedTools: null,
-        spawnCommand: null,
-      });
-    });
-
-    it("should not overwrite existing config", async () => {
-      const orraDir = path.join(tmpDir, ".orra");
-      fs.mkdirSync(orraDir, { recursive: true });
-      fs.writeFileSync(
-        path.join(orraDir, "config.json"),
-        JSON.stringify({ defaultModel: "opus", defaultAllowedTools: null })
-      );
-      await state.init();
-      const config = JSON.parse(
-        fs.readFileSync(path.join(orraDir, "config.json"), "utf-8")
-      );
-      expect(config.defaultModel).toBe("opus");
+      expect(fs.existsSync(path.join(tmpDir, ".orra", "config.json"))).toBe(false);
     });
   });
 
@@ -59,17 +38,17 @@ describe("StateManager", () => {
     it("should save and load agent state", async () => {
       const agent = {
         id: "test-a1b2",
-        type: "spawned" as const,
         task: "test task",
         branch: "orra/test-a1b2",
         worktree: "worktrees/test-a1b2",
         pid: 12345,
         status: "running" as const,
+        agentPersona: null,
+        model: null,
         createdAt: "2026-04-06T14:30:00.000Z",
         updatedAt: "2026-04-06T14:30:00.000Z",
         exitCode: null,
-        model: null,
-        allowedTools: null,
+        pendingQuestion: null,
       };
       await state.saveAgent(agent);
       const loaded = await state.loadAgent("test-a1b2");
@@ -89,11 +68,12 @@ describe("StateManager", () => {
         worktree: "worktrees/agent-1",
         pid: 111,
         status: "running" as const,
+        agentPersona: null,
+        model: null,
         createdAt: "2026-04-06T14:30:00.000Z",
         updatedAt: "2026-04-06T14:30:00.000Z",
         exitCode: null,
-        model: null,
-        allowedTools: null,
+        pendingQuestion: null,
       };
       const agent2 = {
         id: "agent-2",
@@ -102,11 +82,12 @@ describe("StateManager", () => {
         worktree: "worktrees/agent-2",
         pid: 222,
         status: "completed" as const,
+        agentPersona: null,
+        model: null,
         createdAt: "2026-04-06T14:31:00.000Z",
         updatedAt: "2026-04-06T14:32:00.000Z",
         exitCode: 0,
-        model: null,
-        allowedTools: null,
+        pendingQuestion: null,
       };
       await state.saveAgent(agent1);
       await state.saveAgent(agent2);
@@ -137,21 +118,6 @@ describe("StateManager", () => {
       await state.appendLog("test-a1b2", "line 1\nline 2\nline 3\nline 4\nline 5\n");
       const tail = await state.readLog("test-a1b2", 2);
       expect(tail).toBe("line 4\nline 5");
-    });
-  });
-
-  describe("config", () => {
-    beforeEach(async () => {
-      await state.init();
-    });
-
-    it("should load config", async () => {
-      const config = await state.loadConfig();
-      expect(config).toEqual({
-        defaultModel: null,
-        defaultAllowedTools: null,
-        spawnCommand: null,
-      });
     });
   });
 
@@ -201,11 +167,12 @@ describe("StateManager", () => {
         worktree: "worktrees/dead-agent",
         pid: 99999999,
         status: "running" as const,
+        agentPersona: null,
+        model: null,
         createdAt: "2026-04-06T14:30:00.000Z",
         updatedAt: "2026-04-06T14:30:00.000Z",
         exitCode: null,
-        model: null,
-        allowedTools: null,
+        pendingQuestion: null,
       };
       await state.saveAgent(agent);
       await state.reconcile();
@@ -221,11 +188,12 @@ describe("StateManager", () => {
         worktree: "worktrees/done-agent",
         pid: 99999999,
         status: "completed" as const,
+        agentPersona: null,
+        model: null,
         createdAt: "2026-04-06T14:30:00.000Z",
         updatedAt: "2026-04-06T14:31:00.000Z",
         exitCode: 0,
-        model: null,
-        allowedTools: null,
+        pendingQuestion: null,
       };
       await state.saveAgent(agent);
       await state.reconcile();

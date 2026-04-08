@@ -5,7 +5,7 @@ import * as path from "node:path";
 import * as os from "node:os";
 import { execSync } from "node:child_process";
 import { classify, readGitState, scanMarkers, readAgentState } from "../../src/core/awareness.js";
-import type { GitState, AgentStateV2, PrState } from "../../src/types.js";
+import type { GitState, AgentState, PrState } from "../../src/types.js";
 
 // ─── classify ────────────────────────────────────────────────────────────────
 
@@ -28,7 +28,7 @@ const oldGit: GitState = {
   lastCommit: new Date(Date.now() - 5 * 24 * 60 * 60 * 1000).toISOString(),
 };
 
-const baseAgent: AgentStateV2 = {
+const baseAgent: AgentState = {
   id: "agent-abc",
   task: "do something",
   branch: "orra/agent-abc",
@@ -61,7 +61,7 @@ describe("classify", () => {
   });
 
   it("needs_attention: agent has pending question", () => {
-    const agent: AgentStateV2 = {
+    const agent: AgentState = {
       ...baseAgent,
       pendingQuestion: { tool: "Bash", input: { command: "rm -rf /" } },
     };
@@ -87,7 +87,7 @@ describe("classify", () => {
   });
 
   it("in_progress: idle agent", () => {
-    const agent: AgentStateV2 = { ...baseAgent, status: "idle" };
+    const agent: AgentState = { ...baseAgent, status: "idle" };
     const result = classify(baseGit, agent, null, opts);
     expect(result.status).toBe("in_progress");
   });
@@ -122,7 +122,7 @@ describe("classify", () => {
   });
 
   it("pending question takes priority over PR approval", () => {
-    const agent: AgentStateV2 = {
+    const agent: AgentState = {
       ...baseAgent,
       pendingQuestion: { tool: "Edit", input: { path: "/etc/passwd" } },
     };
@@ -235,7 +235,7 @@ describe("readAgentState", () => {
   });
 
   it("reads agent state from file", async () => {
-    const agentData: AgentStateV2 = {
+    const agentData: AgentState = {
       id: "test-agent",
       task: "build something",
       branch: "orra/test-agent",
@@ -261,7 +261,7 @@ describe("readAgentState", () => {
   });
 
   it("corrects dead PID running agent to interrupted", async () => {
-    const agentData: AgentStateV2 = {
+    const agentData: AgentState = {
       id: "dead-agent",
       task: "some task",
       branch: "orra/dead-agent",
@@ -286,7 +286,7 @@ describe("readAgentState", () => {
   });
 
   it("does not modify status of completed agent with dead PID", async () => {
-    const agentData: AgentStateV2 = {
+    const agentData: AgentState = {
       id: "done-agent",
       task: "task done",
       branch: "orra/done-agent",
@@ -311,7 +311,7 @@ describe("readAgentState", () => {
   });
 
   it("reads agent with pending question", async () => {
-    const agentData: AgentStateV2 = {
+    const agentData: AgentState = {
       id: "question-agent",
       task: "dangerous task",
       branch: "orra/question-agent",
