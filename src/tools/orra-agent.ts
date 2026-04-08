@@ -1,5 +1,4 @@
 import { z } from "zod";
-import type { SocketClient } from "../core/socket-client.js";
 import { handleRegister } from "./register.js";
 import { handleUnregister } from "./unregister.js";
 import { handleHeartbeat } from "./heartbeat.js";
@@ -22,8 +21,9 @@ export const orraAgentSchema = z.object({
   activity: z.string().optional().describe("What you're currently doing (heartbeat)"),
 });
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export async function handleOrraAgent(
-  client: SocketClient,
+  client: any,
   args: z.infer<typeof orraAgentSchema>
 ) {
   switch (args.action) {
