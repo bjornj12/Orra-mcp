@@ -23,17 +23,16 @@ describe("File-based hook communication", () => {
     // Write initial agent state file
     const initialState = {
       id: agentId,
-      type: "spawned",
       task: "test task",
       branch: "orra/test",
       worktree: "worktrees/test",
       pid: 0,
       status: "running",
+      agentPersona: null,
+      model: null,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       exitCode: null,
-      model: null,
-      allowedTools: null,
       pendingQuestion: null,
     };
     fs.writeFileSync(agentFilePath(), JSON.stringify(initialState, null, 2));

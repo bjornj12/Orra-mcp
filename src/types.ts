@@ -11,32 +11,7 @@ export const AgentStatus = z.enum([
 ]);
 export type AgentStatus = z.infer<typeof AgentStatus>;
 
-export const AgentStateSchema = z.object({
-  id: z.string(),
-  type: z.enum(["spawned", "external"]).default("spawned"),
-  task: z.string(),
-  branch: z.string(),
-  worktree: z.string(),
-  pid: z.number(),
-  status: AgentStatus,
-  createdAt: z.string(),
-  updatedAt: z.string(),
-  exitCode: z.number().nullable(),
-  model: z.string().nullable(),
-  allowedTools: z.array(z.string()).nullable(),
-});
-export type AgentState = z.infer<typeof AgentStateSchema>;
-
 export const ConfigSchema = z.object({
-  defaultModel: z.string().nullable(),
-  defaultAllowedTools: z.array(z.string()).nullable(),
-  spawnCommand: z.string().nullable().default(null),
-});
-export type Config = z.infer<typeof ConfigSchema>;
-
-// === v2 Types ===
-
-export const ConfigV2Schema = z.object({
   markers: z.array(z.string()).default(["spec.md", "PRD.md", "PLAN.md", "CHANGELOG.md"]),
   staleDays: z.number().default(3),
   worktreeDir: z.string().default("worktrees"),
@@ -44,7 +19,7 @@ export const ConfigV2Schema = z.object({
   defaultModel: z.string().nullable().default(null),
   defaultAgent: z.string().nullable().default(null),
 });
-export type ConfigV2 = z.infer<typeof ConfigV2Schema>;
+export type Config = z.infer<typeof ConfigSchema>;
 
 export const GitStateSchema = z.object({
   ahead: z.number(),
@@ -79,7 +54,7 @@ export const PendingQuestionSchema = z.object({
 });
 export type PendingQuestion = z.infer<typeof PendingQuestionSchema>;
 
-export const AgentStateV2Schema = z.object({
+export const AgentStateSchema = z.object({
   id: z.string(),
   task: z.string(),
   branch: z.string(),
@@ -93,7 +68,7 @@ export const AgentStateV2Schema = z.object({
   exitCode: z.number().nullable(),
   pendingQuestion: PendingQuestionSchema.nullable(),
 });
-export type AgentStateV2 = z.infer<typeof AgentStateV2Schema>;
+export type AgentState = z.infer<typeof AgentStateSchema>;
 
 export const WorktreeScanEntrySchema = z.object({
   id: z.string(),
@@ -103,7 +78,7 @@ export const WorktreeScanEntrySchema = z.object({
   git: GitStateSchema,
   markers: z.array(z.string()),
   pr: PrStateSchema.nullable(),
-  agent: AgentStateV2Schema.nullable(),
+  agent: AgentStateSchema.nullable(),
   flags: z.array(z.string()),
 });
 export type WorktreeScanEntry = z.infer<typeof WorktreeScanEntrySchema>;

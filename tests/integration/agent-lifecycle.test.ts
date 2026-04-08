@@ -34,7 +34,6 @@ describe("Agent Lifecycle (integration)", () => {
   it("should initialize .orra directory structure", () => {
     expect(fs.existsSync(path.join(tmpDir, ".orra"))).toBe(true);
     expect(fs.existsSync(path.join(tmpDir, ".orra", "agents"))).toBe(true);
-    expect(fs.existsSync(path.join(tmpDir, ".orra", "config.json"))).toBe(true);
   });
 
   it("should list no agents initially", async () => {

@@ -14,7 +14,6 @@ export interface SpawnAgentOptions {
   branch?: string;
   model?: string;
   agent?: string;
-  allowedTools?: string[];
 }
 
 export interface SpawnResult {
@@ -55,13 +54,6 @@ export class AgentManager {
     const shortId = crypto.randomBytes(2).toString("hex");
     const slug = slugify(options.task);
     const agentId = `${slug}-${shortId}`;
-
-    const config = await this.state.loadConfig();
-
-    // If custom spawn command is configured, use it instead of default worktree+claude
-    if (config.spawnCommand) {
-      return this.spawnWithCustomCommand(agentId, options, config.spawnCommand);
-    }
 
     // Use existing worktree if branch already has one, otherwise create new
     let branch: string;
@@ -120,17 +112,17 @@ export class AgentManager {
     const now = new Date().toISOString();
     const agentState: AgentState = {
       id: agentId,
-      type: "spawned",
       task: options.task,
       branch,
       worktree: worktreePath,
       pid: 0,
       status: "running",
+      agentPersona: options.agent ?? null,
+      model: options.model ?? null,
       createdAt: now,
       updatedAt: now,
       exitCode: null,
-      model: options.model ?? null,
-      allowedTools: options.allowedTools ?? null,
+      pendingQuestion: null,
     };
 
     const parser = new StreamParser((chunk) => {
@@ -161,58 +153,6 @@ export class AgentManager {
       branch,
       worktree: worktreePath,
     };
-  }
-
-  private async spawnWithCustomCommand(
-    agentId: string,
-    options: SpawnAgentOptions,
-    spawnCommand: string
-  ): Promise<SpawnResult> {
-    const branch = options.branch ?? `orra/${agentId}`;
-
-    // Expand template variables in the spawn command
-    const expandedCommand = spawnCommand
-      .replace(/\{\{branch\}\}/g, branch)
-      .replace(/\{\{task\}\}/g, options.task)
-      .replace(/\{\{agentId\}\}/g, agentId);
-
-    const now = new Date().toISOString();
-    const agentState: AgentState = {
-      id: agentId,
-      type: "spawned",
-      task: options.task,
-      branch,
-      worktree: "",
-      pid: 0,
-      status: "running",
-      createdAt: now,
-      updatedAt: now,
-      exitCode: null,
-      model: options.model ?? null,
-      allowedTools: options.allowedTools ?? null,
-    };
-
-    const parser = new StreamParser((chunk) => {
-      this.state.appendLog(agentId, chunk).catch(() => {});
-    });
-
-    // Split command into shell execution — the custom command handles
-    // worktree creation, env setup, and starting claude
-    const managed = this.processes.spawn({
-      command: "/bin/sh",
-      args: ["-c", expandedCommand],
-      cwd: this.projectRoot,
-      onData: (data) => parser.feed(data),
-      onExit: (exitCode) => this.handleAgentExit(agentId, exitCode),
-      env: { ORRA_AGENT_ID: agentId },
-    });
-
-    agentState.pid = managed.pid;
-    await this.state.saveAgent(agentState);
-
-    this.runningProcesses.set(agentId, managed);
-
-    return { agentId, branch, worktree: "" };
   }
 
   async listAgents(): Promise<AgentState[]> {
@@ -348,7 +288,6 @@ export class AgentManager {
 
     if (options.agent) args.push("--agent", options.agent);
     if (options.model) args.push("--model", options.model);
-    if (options.allowedTools?.length) args.push("--allowedTools", options.allowedTools.join(","));
 
     return args;
   }

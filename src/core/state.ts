@@ -1,6 +1,6 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { AgentStateSchema, ConfigSchema, type AgentState, type Config } from "../types.js";
+import { AgentStateSchema, type AgentState } from "../types.js";
 
 function pidIsAlive(pid: number): boolean {
   try {
@@ -14,30 +14,21 @@ function pidIsAlive(pid: number): boolean {
 export class StateManager {
   private orraDir: string;
   private agentsDir: string;
-  private configPath: string;
 
   constructor(private projectRoot: string) {
     this.orraDir = path.join(projectRoot, ".orra");
     this.agentsDir = path.join(this.orraDir, "agents");
-    this.configPath = path.join(this.orraDir, "config.json");
   }
 
   async init(): Promise<void> {
     await fs.mkdir(this.agentsDir, { recursive: true });
-
-    try {
-      await fs.access(this.configPath);
-    } catch {
-      await fs.writeFile(
-        this.configPath,
-        JSON.stringify({ defaultModel: null, defaultAllowedTools: null, spawnCommand: null }, null, 2)
-      );
-    }
   }
 
   async saveAgent(agent: AgentState): Promise<void> {
     const filePath = path.join(this.agentsDir, `${agent.id}.json`);
-    await fs.writeFile(filePath, JSON.stringify(agent, null, 2));
+    const tmpPath = filePath + ".tmp";
+    await fs.writeFile(tmpPath, JSON.stringify(agent, null, 2));
+    await fs.rename(tmpPath, filePath);
   }
 
   async loadAgent(id: string): Promise<AgentState | null> {
@@ -102,15 +93,6 @@ export class StateManager {
       }
     } catch {
       return { content: "", newOffset: 0 };
-    }
-  }
-
-  async loadConfig(): Promise<Config> {
-    try {
-      const data = await fs.readFile(this.configPath, "utf-8");
-      return ConfigSchema.parse(JSON.parse(data));
-    } catch {
-      return { defaultModel: null, defaultAllowedTools: null, spawnCommand: null };
     }
   }
 
