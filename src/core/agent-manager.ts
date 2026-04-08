@@ -1,5 +1,4 @@
 import * as crypto from "node:crypto";
-import * as net from "node:net";
 import * as fsp from "node:fs/promises";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,7 +7,6 @@ import { WorktreeManager, slugify } from "./worktree.js";
 import { ProcessManager, type ManagedProcess } from "./process.js";
 import { StreamParser } from "./stream-parser.js";
 import { Linker, expandTemplate } from "./linker.js";
-import { SocketServer } from "./socket-server.js";
 import { parseAllowDeny } from "../bin/orra-hook.js";
 import type { AgentState, Link, LinkTo, LinkTrigger } from "../types.js";
 
@@ -46,8 +44,7 @@ export class AgentManager {
   private linker: Linker;
   private runningProcesses: Map<string, ManagedProcess> = new Map();
   private killedAgents: Set<string> = new Set();
-  private socketServer: SocketServer | null = null;
-  private pendingQuestions: Map<string, { hookSocket: net.Socket; tool: string; input: Record<string, unknown> }> = new Map();
+  private pendingQuestions: Map<string, { tool: string; input: Record<string, unknown> }> = new Map();
   private logOffsets: Map<string, number> = new Map();
   private turnPreviews: Map<string, string> = new Map();
 
@@ -63,35 +60,6 @@ export class AgentManager {
     const links = await this.state.loadLinks();
     this.linker.loadLinks(links);
     await this.state.reconcile();
-
-    this.socketServer = new SocketServer(this.projectRoot);
-    this.socketServer.onRegister = (_socket, msg) => {
-      return this.handleExternalRegister(msg.task, msg.branch);
-    };
-    this.socketServer.onOutput = (agentId, data) => {
-      this.state.appendLog(agentId, data).catch(() => {});
-    };
-    this.socketServer.onStatus = (agentId, status, exitCode) => {
-      this.handleExternalStatus(agentId, status, exitCode).catch((err) =>
-        console.error(`Failed to handle external status for ${agentId}:`, err)
-      );
-    };
-    this.socketServer.onDisconnect = (agentId) => {
-      this.handleExternalDisconnect(agentId).catch((err) =>
-        console.error(`Failed to handle disconnect for ${agentId}:`, err)
-      );
-    };
-    this.socketServer.onQuestion = (hookSocket, agentId, tool, input) => {
-      this.handleQuestion(hookSocket, agentId, tool, input).catch((err) =>
-        console.error(`Failed to handle question for ${agentId}:`, err)
-      );
-    };
-    this.socketServer.onTurnComplete = (agentId) => {
-      this.handleTurnComplete(agentId).catch((err) =>
-        console.error(`Failed to handle turn_complete for ${agentId}:`, err)
-      );
-    };
-    await this.socketServer.start();
   }
 
   async spawnAgent(options: SpawnAgentOptions): Promise<SpawnResult> {
@@ -288,19 +256,6 @@ export class AgentManager {
 
     this.killedAgents.add(agentId);
 
-    if (agent.type === "external") {
-      this.socketServer?.sendToAgent(agentId, {
-        type: "stop",
-        reason: "Orchestrator requested stop",
-      });
-
-      agent.status = "killed";
-      agent.updatedAt = new Date().toISOString();
-      await this.state.saveAgent(agent);
-
-      return { agentId, status: "killed", cleaned: false };
-    }
-
     const proc = this.runningProcesses.get(agentId);
     if (proc && agent.status === "running") {
       proc.kill("SIGTERM");
@@ -345,43 +300,6 @@ export class AgentManager {
     return { agentId, status: "killed", cleaned, warning };
   }
 
-  private async handleQuestion(
-    hookSocket: net.Socket,
-    agentId: string,
-    tool: string,
-    input: Record<string, unknown>
-  ): Promise<void> {
-    const agent = await this.state.loadAgent(agentId);
-    if (!agent) return;
-
-    agent.status = "waiting";
-    agent.updatedAt = new Date().toISOString();
-    await this.state.saveAgent(agent);
-
-    this.pendingQuestions.set(agentId, { hookSocket, tool, input });
-  }
-
-  private async handleTurnComplete(agentId: string): Promise<void> {
-    const agent = await this.state.loadAgent(agentId);
-    if (!agent) return;
-
-    if (agent.status !== "running") return;
-
-    const offset = this.logOffsets.get(agentId) ?? 0;
-    const { content, newOffset } = await this.state.readLogRange(agentId, offset);
-    this.logOffsets.set(agentId, newOffset);
-
-    if (content.length > 0) {
-      const lines = content.split("\n").filter((l) => l.trim().length > 0);
-      const preview = lines.slice(-3).join("\n");
-      this.turnPreviews.set(agentId, preview);
-    }
-
-    agent.status = "idle";
-    agent.updatedAt = new Date().toISOString();
-    await this.state.saveAgent(agent);
-  }
-
   getTurnPreview(agentId: string): string | null {
     return this.turnPreviews.get(agentId) ?? null;
   }
@@ -402,7 +320,13 @@ export class AgentManager {
       if (!pending) throw new Error(`Agent ${agentId} has no pending question`);
 
       const allow = parseAllowDeny(message);
-      this.socketServer!.answerQuestion(pending.hookSocket, allow, allow ? undefined : message);
+
+      // Write answer file for the hook to pick up
+      const answerPath = path.join(this.projectRoot, ".orra", "agents", `${agentId}.answer.json`);
+      const tmpPath = answerPath + ".tmp";
+      await fsp.writeFile(tmpPath, JSON.stringify({ allow, reason: allow ? undefined : message }));
+      await fsp.rename(tmpPath, answerPath);
+
       this.pendingQuestions.delete(agentId);
 
       agent.status = "running";
@@ -421,13 +345,6 @@ export class AgentManager {
 
     if (agent.status !== "running")
       throw new Error(`Agent ${agentId} is not running (status: ${agent.status})`);
-
-    if (agent.type === "external") {
-      if (!this.socketServer?.sendToAgent(agentId, { type: "message", content: message })) {
-        throw new Error(`Agent ${agentId} is not connected`);
-      }
-      return;
-    }
 
     const proc = this.runningProcesses.get(agentId);
     if (!proc) throw new Error(`Agent ${agentId} has no active process`);
@@ -506,67 +423,8 @@ export class AgentManager {
     }
   }
 
-  private handleExternalRegister(task: string, branch?: string): string {
-    const shortId = crypto.randomBytes(2).toString("hex");
-    const slug = slugify(task);
-    const agentId = `${slug}-${shortId}`;
-
-    const now = new Date().toISOString();
-    const agentState: AgentState = {
-      id: agentId,
-      type: "external",
-      task,
-      branch: branch ?? "",
-      worktree: "",
-      pid: 0,
-      status: "running",
-      createdAt: now,
-      updatedAt: now,
-      exitCode: null,
-      model: null,
-      allowedTools: null,
-    };
-
-    this.state.saveAgent(agentState).catch((err) =>
-      console.error(`Failed to save external agent ${agentId}:`, err)
-    );
-
-    return agentId;
-  }
-
-  private async handleExternalStatus(agentId: string, status: string, exitCode: number): Promise<void> {
-    const agent = await this.state.loadAgent(agentId);
-    if (!agent) return;
-
-    agent.status = status === "completed" ? "completed" : "failed";
-    agent.exitCode = exitCode;
-    agent.updatedAt = new Date().toISOString();
-    await this.state.saveAgent(agent);
-
-    const matchingLinks = this.linker.findMatchingLinks(agentId, exitCode);
-    this.linker.evaluateAndExpire(agentId, exitCode);
-    await this.state.saveLinks(this.linker.getAllLinks());
-
-    for (const link of matchingLinks) {
-      await this.fireLink(link, agent);
-    }
-  }
-
-  private async handleExternalDisconnect(agentId: string): Promise<void> {
-    if (this.killedAgents.has(agentId)) return;
-
-    const agent = await this.state.loadAgent(agentId);
-    if (!agent || agent.status !== "running") return;
-
-    agent.status = "interrupted";
-    agent.updatedAt = new Date().toISOString();
-    await this.state.saveAgent(agent);
-  }
-
   async shutdown(): Promise<void> {
-    if (this.socketServer) {
-      await this.socketServer.stop();
-    }
+    // No-op for now
   }
 
   private async fireLink(link: Link, fromAgent: AgentState): Promise<void> {
