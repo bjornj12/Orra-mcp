@@ -1,6 +1,6 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { AgentStateSchema, ConfigSchema, LinkSchema, type AgentState, type Config, type Link } from "../types.js";
+import { AgentStateSchema, ConfigSchema, type AgentState, type Config } from "../types.js";
 
 function pidIsAlive(pid: number): boolean {
   try {
@@ -15,13 +15,11 @@ export class StateManager {
   private orraDir: string;
   private agentsDir: string;
   private configPath: string;
-  private linksPath: string;
 
   constructor(private projectRoot: string) {
     this.orraDir = path.join(projectRoot, ".orra");
     this.agentsDir = path.join(this.orraDir, "agents");
     this.configPath = path.join(this.orraDir, "config.json");
-    this.linksPath = path.join(this.orraDir, "links.json");
   }
 
   async init(): Promise<void> {
@@ -34,12 +32,6 @@ export class StateManager {
         this.configPath,
         JSON.stringify({ defaultModel: null, defaultAllowedTools: null, spawnCommand: null }, null, 2)
       );
-    }
-
-    try {
-      await fs.access(this.linksPath);
-    } catch {
-      await fs.writeFile(this.linksPath, JSON.stringify([], null, 2));
     }
   }
 
@@ -110,20 +102,6 @@ export class StateManager {
       }
     } catch {
       return { content: "", newOffset: 0 };
-    }
-  }
-
-  async saveLinks(links: Link[]): Promise<void> {
-    await fs.writeFile(this.linksPath, JSON.stringify(links, null, 2));
-  }
-
-  async loadLinks(): Promise<Link[]> {
-    try {
-      const data = await fs.readFile(this.linksPath, "utf-8");
-      const parsed = JSON.parse(data);
-      return (parsed as unknown[]).map((l: unknown) => LinkSchema.parse(l));
-    } catch {
-      return [];
     }
   }
 
