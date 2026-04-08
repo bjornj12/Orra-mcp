@@ -77,9 +77,35 @@ function resolveStateDir(env: Record<string, string | undefined>, worktreeRoot: 
   return path.join(mainRoot, ".orra");
 }
 
+function ensureAgentFile(projectRoot: string, agentId: string): void {
+  const agentFile = path.join(projectRoot, ".orra", "agents", `${agentId}.json`);
+  if (fs.existsSync(agentFile)) return;
+
+  // Auto-create agent state file on first hook fire
+  const agentsDir = path.join(projectRoot, ".orra", "agents");
+  fs.mkdirSync(agentsDir, { recursive: true });
+  const now = new Date().toISOString();
+  const state = {
+    id: agentId,
+    task: "",
+    branch: "",
+    worktree: "",
+    pid: process.ppid || 0,
+    status: "running",
+    agentPersona: null,
+    model: null,
+    createdAt: now,
+    updatedAt: now,
+    exitCode: null,
+    pendingQuestion: null,
+  };
+  fs.writeFileSync(agentFile, JSON.stringify(state, null, 2));
+}
+
 export async function writeQuestion(
   projectRoot: string, agentId: string, tool: string, input: Record<string, unknown>
 ): Promise<void> {
+  ensureAgentFile(projectRoot, agentId);
   const agentFile = path.join(projectRoot, ".orra", "agents", `${agentId}.json`);
   const data = JSON.parse(fs.readFileSync(agentFile, "utf-8"));
   data.status = "waiting";
@@ -111,6 +137,7 @@ export async function pollForAnswer(
 }
 
 export async function writeTurnComplete(projectRoot: string, agentId: string): Promise<void> {
+  ensureAgentFile(projectRoot, agentId);
   const agentFile = path.join(projectRoot, ".orra", "agents", `${agentId}.json`);
   try {
     const data = JSON.parse(fs.readFileSync(agentFile, "utf-8"));
