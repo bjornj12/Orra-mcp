@@ -195,13 +195,15 @@ export async function enrichWithGitHub(
     await Promise.all(
       worktrees.map(async ({ branch }) => {
         try {
+          // Use gh pr view (not pr list) to get reviewDecision — the computed aggregate
+          // that accounts for superseded reviews (e.g., CHANGES_REQUESTED → APPROVED)
           const { stdout } = await execFileAsync("gh", [
             "pr",
             "list",
             "--head",
             branch,
             "--json",
-            "number,state,reviews,statusCheckRollup,mergeable",
+            "number,state,reviewDecision,statusCheckRollup,mergeable",
             "--limit",
             "1",
           ]);
@@ -209,15 +211,15 @@ export async function enrichWithGitHub(
           if (!Array.isArray(parsed) || parsed.length === 0) return;
           const pr = parsed[0];
 
-          // Derive reviews status
+          // reviewDecision is GitHub's computed aggregate: APPROVED, CHANGES_REQUESTED, REVIEW_REQUIRED, or ""
           let reviews = "none";
-          if (Array.isArray(pr.reviews) && pr.reviews.length > 0) {
-            const states = pr.reviews.map((r: { state: string }) => r.state.toLowerCase());
-            if (states.includes("changes_requested")) {
-              reviews = "changes_requested";
-            } else if (states.every((s: string) => s === "approved")) {
-              reviews = "approved";
-            }
+          const decision = (pr.reviewDecision ?? "").toLowerCase();
+          if (decision === "approved") {
+            reviews = "approved";
+          } else if (decision === "changes_requested") {
+            reviews = "changes_requested";
+          } else if (decision === "review_required") {
+            reviews = "pending";
           }
 
           // Derive CI status
