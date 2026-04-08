@@ -34,8 +34,6 @@ describe("Agent Lifecycle (integration)", () => {
   it("should initialize .orra directory structure", () => {
     expect(fs.existsSync(path.join(tmpDir, ".orra"))).toBe(true);
     expect(fs.existsSync(path.join(tmpDir, ".orra", "agents"))).toBe(true);
-    expect(fs.existsSync(path.join(tmpDir, ".orra", "config.json"))).toBe(true);
-    expect(fs.existsSync(path.join(tmpDir, ".orra", "links.json"))).toBe(true);
   });
 
   it("should list no agents initially", async () => {
@@ -63,9 +61,4 @@ describe("Agent Lifecycle (integration)", () => {
     );
   });
 
-  it("should throw when linking from non-existent agent", async () => {
-    await expect(
-      manager.linkAgents("nonexistent", { task: "review" }, "success")
-    ).rejects.toThrow("not found");
-  });
 });

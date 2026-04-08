@@ -1,5 +1,4 @@
 #!/usr/bin/env node
-import * as net from "node:net";
 import * as fs from "node:fs";
 import * as path from "node:path";
 
@@ -72,114 +71,87 @@ async function readStdin(): Promise<string> {
   return Buffer.concat(chunks).toString("utf-8");
 }
 
-function connectToSocket(sockPath: string, timeout: number): Promise<net.Socket> {
-  return new Promise((resolve, reject) => {
-    const socket = net.createConnection(sockPath, () => {
-      clearTimeout(timer);
-      resolve(socket);
-    });
-    const timer = setTimeout(() => {
-      socket.destroy();
-      reject(new Error("Connection timeout"));
-    }, timeout);
-    socket.on("error", (err) => {
-      clearTimeout(timer);
-      reject(err);
-    });
-  });
+function resolveStateDir(env: Record<string, string | undefined>, worktreeRoot: string): string {
+  if (env.ORRA_STATE_DIR) return env.ORRA_STATE_DIR;
+  const mainRoot = findMainRepoRoot(worktreeRoot);
+  return path.join(mainRoot, ".orra");
 }
 
-function waitForMessage(socket: net.Socket, timeout: number): Promise<Record<string, unknown>> {
-  return new Promise((resolve, reject) => {
-    let buffer = "";
-    const timer = setTimeout(() => {
-      socket.destroy();
-      reject(new Error("Answer timeout"));
-    }, timeout);
+export async function writeQuestion(
+  projectRoot: string, agentId: string, tool: string, input: Record<string, unknown>
+): Promise<void> {
+  const agentFile = path.join(projectRoot, ".orra", "agents", `${agentId}.json`);
+  const data = JSON.parse(fs.readFileSync(agentFile, "utf-8"));
+  data.status = "waiting";
+  data.updatedAt = new Date().toISOString();
+  data.pendingQuestion = { tool, input };
+  // Atomic write
+  const tmpFile = agentFile + ".tmp";
+  fs.writeFileSync(tmpFile, JSON.stringify(data, null, 2));
+  fs.renameSync(tmpFile, agentFile);
+}
 
-    socket.on("data", (chunk) => {
-      buffer += chunk.toString();
-      const lines = buffer.split("\n");
-      buffer = lines.pop()!;
-      for (const line of lines) {
-        if (line.trim().length > 0) {
-          clearTimeout(timer);
-          try {
-            resolve(JSON.parse(line));
-          } catch {
-            reject(new Error("Invalid JSON from orchestrator"));
-          }
-          return;
-        }
-      }
-    });
+export async function pollForAnswer(
+  projectRoot: string, agentId: string, timeoutMs = 300000, intervalMs = 100
+): Promise<{ allow: boolean; reason?: string }> {
+  const answerPath = path.join(projectRoot, ".orra", "agents", `${agentId}.answer.json`);
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    try {
+      const data = fs.readFileSync(answerPath, "utf-8");
+      const answer = JSON.parse(data);
+      try { fs.unlinkSync(answerPath); } catch {}
+      return { allow: !!answer.allow, reason: answer.reason };
+    } catch {
+      // File doesn't exist yet
+    }
+    await new Promise(resolve => setTimeout(resolve, intervalMs));
+  }
+  return { allow: false }; // Timeout → deny
+}
 
-    socket.on("close", () => {
-      clearTimeout(timer);
-      reject(new Error("Socket closed before answer received"));
-    });
-
-    socket.on("error", (err) => {
-      clearTimeout(timer);
-      reject(err);
-    });
-  });
+export async function writeTurnComplete(projectRoot: string, agentId: string): Promise<void> {
+  const agentFile = path.join(projectRoot, ".orra", "agents", `${agentId}.json`);
+  try {
+    const data = JSON.parse(fs.readFileSync(agentFile, "utf-8"));
+    data.status = "idle";
+    data.updatedAt = new Date().toISOString();
+    data.pendingQuestion = null;
+    const tmpFile = agentFile + ".tmp";
+    fs.writeFileSync(tmpFile, JSON.stringify(data, null, 2));
+    fs.renameSync(tmpFile, agentFile);
+  } catch {}
 }
 
 async function handlePermissionRequest(
   agentId: string,
-  sockPath: string,
+  projectRoot: string,
   hookInput: Record<string, unknown>
 ): Promise<void> {
   const toolName = (hookInput.tool_name as string) ?? "unknown";
   const toolInput = (hookInput.tool_input as Record<string, unknown>) ?? {};
 
-  let socket: net.Socket;
   try {
-    socket = await connectToSocket(sockPath, 2000);
+    await writeQuestion(projectRoot, agentId, toolName, toolInput);
   } catch {
     process.exit(1);
   }
 
-  socket.write(JSON.stringify({
-    type: "question",
-    agentId,
-    tool: toolName,
-    input: toolInput,
-  }) + "\n");
+  const answer = await pollForAnswer(projectRoot, agentId, 300000, 100);
 
-  try {
-    const answer = await waitForMessage(socket, 300000); // 5 minute timeout
-    socket.destroy();
-
-    if (answer.allow) {
-      console.log(JSON.stringify(buildPermissionResponse(true)));
-      process.exit(0);
-    } else {
-      const reason = (answer.reason as string) ?? "Denied by orchestrator";
-      console.error(reason);
-      process.exit(2);
-    }
-  } catch {
-    socket.destroy();
-    process.exit(1);
+  if (answer.allow) {
+    console.log(JSON.stringify(buildPermissionResponse(true)));
+    process.exit(0);
+  } else {
+    const reason = answer.reason ?? "Denied by orchestrator";
+    console.error(reason);
+    process.exit(2);
   }
 }
 
-async function handleStop(agentId: string, sockPath: string): Promise<void> {
-  try {
-    const socket = await connectToSocket(sockPath, 2000);
-    socket.write(JSON.stringify({
-      type: "turn_complete",
-      agentId,
-    }) + "\n");
-    setTimeout(() => {
-      socket.destroy();
-      process.exit(0);
-    }, 100);
-  } catch {
-    process.exit(0);
-  }
+async function handleStop(agentId: string, projectRoot: string): Promise<void> {
+  await writeTurnComplete(projectRoot, agentId);
+  process.exit(0);
 }
 
 async function main(): Promise<void> {
@@ -195,25 +167,20 @@ async function main(): Promise<void> {
   const hookEvent = hookInput.hook_event_name as string;
   const cwd = (hookInput.cwd as string) ?? process.cwd();
   const worktreeRoot = findProjectRoot(cwd);
-  const mainRepoRoot = findMainRepoRoot(worktreeRoot);
-  // Socket is in the main repo's .orra/, agent ID is in the worktree's .orra/
-  const sockPath = path.join(mainRepoRoot, ".orra", "orra.sock");
+  const stateDir = resolveStateDir(process.env, worktreeRoot);
+  const projectRoot = path.dirname(stateDir);
   const agentId = resolveAgentId(process.env, worktreeRoot);
 
   if (!agentId) {
     process.exit(1);
   }
 
-  if (!fs.existsSync(sockPath)) {
-    process.exit(1);
-  }
-
   switch (hookEvent) {
     case "PermissionRequest":
-      await handlePermissionRequest(agentId!, sockPath, hookInput);
+      await handlePermissionRequest(agentId!, projectRoot, hookInput);
       break;
     case "Stop":
-      await handleStop(agentId!, sockPath);
+      await handleStop(agentId!, projectRoot);
       break;
     default:
       process.exit(0);

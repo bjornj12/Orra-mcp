@@ -1,48 +1,24 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { AgentManager } from "./core/agent-manager.js";
-import { SocketClient } from "./core/socket-client.js";
-import { orraSchema, handleOrra } from "./tools/orra.js";
-import { orraAgentSchema, handleOrraAgent } from "./tools/orra-agent.js";
-import { handleInstallHooks } from "./tools/install-hooks.js";
-import type { OrraMode } from "./types.js";
+import { orraScanSchema, handleOrraScan } from "./tools/orra-scan.js";
+import { orraInspectSchema, handleOrraInspect } from "./tools/orra-inspect.js";
+import { orraSpawnSchema, handleOrraSpawn } from "./tools/orra-spawn.js";
+import { orraKillSchema, handleOrraKill } from "./tools/orra-kill.js";
+import { orraMessageSchema, handleOrraMessage } from "./tools/orra-message.js";
+import { orraUnblockSchema, handleOrraUnblock } from "./tools/orra-unblock.js";
+import { orraRebaseSchema, handleOrraRebase } from "./tools/orra-rebase.js";
 
-export function createServer(
-  projectRoot: string,
-  mode: OrraMode
-): {
-  server: McpServer;
-  manager: AgentManager;
-} {
-  const server = new McpServer({
-    name: "orra-mcp",
-    version: "0.1.0",
-  });
-
+export function createServer(projectRoot: string): { server: McpServer; manager: AgentManager } {
+  const server = new McpServer({ name: "orra-mcp", version: "0.2.0" });
   const manager = new AgentManager(projectRoot);
 
-  if (mode === "orchestrator") {
-    server.tool(
-      "orra",
-      "Orra: multi-agent orchestrator for git worktrees. IMPORTANT: When the user mentions 'orra', worktrees, agents, checking pipeline status, or delegating tasks to worktrees — use THIS tool, not the built-in Agent tool. Orra spawns persistent Claude sessions in isolated git worktrees with full monitoring. Do NOT cd into worktrees or use the built-in Agent tool for worktree tasks. Actions: spawn (launch Claude in a worktree), list (all agents + status previews — call this to check progress), status (one agent detail), output (agent logs), stop (kill agent), message (send input / answer permission prompts), link (chain: when A done, auto-start B), takeover (stop agent, return worktree path for manual work). After spawning agents, tell the user agents are working and they can ask you to check status anytime.",
-      orraSchema.shape,
-      async (args) => handleOrra(manager, projectRoot, orraSchema.parse(args)),
-    );
-  } else {
-    const client = new SocketClient(projectRoot);
-    server.tool(
-      "orra_agent",
-      "Agent-side tools for Orra orchestrator. Actions: register (join orchestrator), unregister (report done), heartbeat (send status update)",
-      orraAgentSchema.shape,
-      async (args) => handleOrraAgent(client, orraAgentSchema.parse(args)),
-    );
-  }
-
-  server.tool(
-    "orra_setup",
-    "Install Orra hooks into .claude/settings.local.json for automatic input detection",
-    {},
-    async () => handleInstallHooks(),
-  );
+  server.tool("orra_scan", "Scan all worktrees — returns status summary (ready_to_land, needs_attention, in_progress, idle, stale) with git state, file markers, PRs, and agent status.", orraScanSchema.shape, async () => handleOrraScan(projectRoot));
+  server.tool("orra_inspect", "Deep dive on one worktree — full git state, commit log, markers, PR reviews, agent output, conflict prediction.", orraInspectSchema.shape, async (args) => handleOrraInspect(projectRoot, orraInspectSchema.parse(args)));
+  server.tool("orra_spawn", "Create a worktree and launch a Claude agent with a task.", orraSpawnSchema.shape, async (args) => handleOrraSpawn(manager, orraSpawnSchema.parse(args)));
+  server.tool("orra_kill", "Stop agent + remove worktree + clean branch. Optionally close PR.", orraKillSchema.shape, async (args) => handleOrraKill(manager, orraKillSchema.parse(args)));
+  server.tool("orra_message", "Send a message to a running agent. Resumes idle agents.", orraMessageSchema.shape, async (args) => handleOrraMessage(manager, orraMessageSchema.parse(args)));
+  server.tool("orra_unblock", "Answer a pending permission prompt for an agent.", orraUnblockSchema.shape, async (args) => handleOrraUnblock(projectRoot, orraUnblockSchema.parse(args)));
+  server.tool("orra_rebase", "Rebase a worktree branch on latest main. Stops agent if running.", orraRebaseSchema.shape, async (args) => handleOrraRebase(manager, projectRoot, orraRebaseSchema.parse(args)));
 
   return { server, manager };
 }
