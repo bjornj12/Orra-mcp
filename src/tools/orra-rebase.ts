@@ -7,8 +7,8 @@ export const orraRebaseSchema = z.object({
 });
 
 export async function handleOrraRebase(manager: AgentManager, projectRoot: string, args: z.infer<typeof orraRebaseSchema>) {
-  const status = await manager.getAgentStatus(args.worktree);
-  const wasRunning = status?.agent && ["running", "idle"].includes(status.agent.status);
+  const agent = await manager.getAgent(args.worktree);
+  const wasRunning = agent && ["running", "idle"].includes(agent.status);
   if (wasRunning) {
     await manager.stopAgent(args.worktree, false);
   }
@@ -16,7 +16,7 @@ export async function handleOrraRebase(manager: AgentManager, projectRoot: strin
   const result = await worktrees.rebase(args.worktree);
   const response: Record<string, unknown> = { worktree: args.worktree, success: result.success, conflicts: result.conflicts };
   if (wasRunning && result.success) {
-    response.note = "Agent was stopped for rebase. Spawn a new agent to continue work.";
+    response.note = "Agent was stopped for rebase. The user should restart their Claude session in the worktree to continue work.";
   }
   return { content: [{ type: "text" as const, text: JSON.stringify(response, null, 2) }] };
 }

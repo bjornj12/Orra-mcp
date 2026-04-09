@@ -36,27 +36,17 @@ describe("Agent Lifecycle (integration)", () => {
     expect(fs.existsSync(path.join(tmpDir, ".orra", "agents"))).toBe(true);
   });
 
-  it("should list no agents initially", async () => {
-    const agents = await manager.listAgents();
-    expect(agents).toHaveLength(0);
-  });
-
-  it("should return null for non-existent agent status", async () => {
-    const status = await manager.getAgentStatus("nonexistent");
-    expect(status).toBeNull();
-  });
-
-  it("should return null for non-existent agent output", async () => {
-    const output = await manager.getAgentOutput("nonexistent");
-    expect(output).toBeNull();
+  it("should return null for non-existent agent", async () => {
+    const agent = await manager.getAgent("nonexistent");
+    expect(agent).toBeNull();
   });
 
   it("should throw when stopping non-existent agent", async () => {
     await expect(manager.stopAgent("nonexistent")).rejects.toThrow("not found");
   });
 
-  it("should throw when messaging non-existent agent", async () => {
-    await expect(manager.sendMessage("nonexistent", "hello")).rejects.toThrow(
+  it("should throw when unblocking non-existent agent", async () => {
+    await expect(manager.unblock("nonexistent", true)).rejects.toThrow(
       "not found"
     );
   });
