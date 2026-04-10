@@ -37,7 +37,8 @@ export async function handleOrraDirective(
         added: true,
         name: sanitizeName(args.name),
         file: fileName,
-        hint: "Restart the orchestrator session to pick up this directive.",
+        directive: args.content,
+        instruction: "IMPORTANT: Follow this directive immediately in the current session. It has also been saved to disk so future sessions will load it automatically.",
       });
     }
 
