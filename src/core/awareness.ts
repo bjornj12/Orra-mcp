@@ -12,6 +12,9 @@ import {
   type ScanResult,
 } from "../types.js";
 import { loadConfig } from "./config.js";
+import { buildProviders, fetchAndMergeProviders } from "./providers/index.js";
+import type { ProviderWorktree, StageInfo } from "./providers/types.js";
+import { loadPipeline, detectStage } from "./pipeline.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -21,13 +24,19 @@ export function classify(
   git: GitState,
   agent: AgentState | null,
   pr: PrState | null,
-  opts: { staleDays: number; driftThreshold: number }
+  opts: { staleDays: number; driftThreshold: number },
+  stage?: StageInfo | null,
+  providerFlags?: string[],
 ): { status: WorktreeStatus; flags: string[] } {
-  const flags: string[] = [];
+  const flags: string[] = [...(providerFlags ?? [])];
 
   if (git.behind > opts.driftThreshold) {
     flags.push("high_drift");
   }
+
+  // Rule 0a: Provider flags take precedence
+  if (flags.includes("blocked")) return { status: "needs_attention", flags };
+  if (flags.includes("ready")) return { status: "ready_to_land", flags };
 
   // 1. Pending question
   if (agent?.pendingQuestion != null) {
@@ -56,12 +65,18 @@ export function classify(
     }
   }
 
-  // 4. Agent running or idle
+  // 4. Stage scoring
+  if (stage?.metadata && typeof stage.metadata.score === "number" && (stage.metadata.score as number) < 85) {
+    flags.push("low_score");
+    return { status: "needs_attention", flags };
+  }
+
+  // 5. Agent running or idle
   if (agent != null && (agent.status === "running" || agent.status === "idle")) {
     return { status: "in_progress", flags };
   }
 
-  // 5. No agent + last commit older than staleDays
+  // 6. No agent + last commit older than staleDays
   if (agent == null) {
     const lastCommitDate = new Date(git.lastCommit);
     const now = new Date();
@@ -293,66 +308,128 @@ function worktreeIdFromPath(worktreePath: string, projectRoot: string): string {
 // ─── scanAll ──────────────────────────────────────────────────────────────────
 
 export async function scanAll(projectRoot: string): Promise<ScanResult> {
+  const config = await loadConfig(projectRoot);
+
+  // Step 1: Fetch providers
+  const providers = buildProviders(config.providers, projectRoot);
+  const { merged: providerData, status: providerStatus } = await fetchAndMergeProviders(
+    providers, config.providerCache,
+  );
+
+  // Step 2: Discover native worktrees
   const { stdout } = await execFileAsync("git", [
     "worktree",
     "list",
     "--porcelain",
   ], { cwd: projectRoot });
-
   const allWorktrees = parseWorktreeList(stdout);
-  // Filter out the main repo
-  const worktrees = allWorktrees.filter((wt) => wt.path !== projectRoot);
+  const nativeWorktrees = allWorktrees.filter((wt) => wt.path !== projectRoot);
 
-  const config = await loadConfig(projectRoot);
+  // Step 3: Build unified worktree list (provider data + native discovery)
+  const worktreeIds = new Set<string>();
+  const worktreesToProcess: Array<{
+    id: string; path: string; branch: string; providerData?: ProviderWorktree;
+  }> = [];
 
-  // For each worktree, gather git state, markers, and agent state in parallel
-  const enrichedWorktrees = await Promise.all(
-    worktrees.map(async (wt) => {
-      const wtId = worktreeIdFromPath(wt.path, projectRoot);
+  for (const [id, pWt] of providerData) {
+    worktreeIds.add(id);
+    worktreesToProcess.push({ id, path: pWt.path, branch: pWt.branch, providerData: pWt });
+  }
 
-      const [git, markers, agent] = await Promise.all([
-        readGitState(wt.path, projectRoot).catch((): GitState => ({
-          ahead: 0,
-          behind: 0,
-          uncommitted: 0,
-          lastCommit: new Date().toISOString(),
-          diffStat: "",
-        })),
-        scanMarkers(wt.path, config.markers),
-        readAgentState(projectRoot, wtId),
-      ]);
-
-      return { wt, wtId, git, markers, agent };
-    })
-  );
-
-  // Enrich with GitHub PR data
-  const prMap = await enrichWithGitHub(worktrees.map((wt) => ({ branch: wt.branch })));
-
-  // Classify and build entries
-  const entries: WorktreeScanEntry[] = enrichedWorktrees.map(
-    ({ wt, wtId, git, markers, agent }) => {
-      const pr = prMap.get(wt.branch) ?? null;
-      const { status, flags } = classify(git, agent, pr, {
-        staleDays: config.staleDays,
-        driftThreshold: config.driftThreshold,
-      });
-
-      return {
-        id: wtId,
-        path: wt.path,
-        branch: wt.branch,
-        status,
-        git,
-        markers,
-        pr,
-        agent,
-        flags,
-      };
+  for (const nwt of nativeWorktrees) {
+    const id = worktreeIdFromPath(nwt.path, projectRoot);
+    if (!worktreeIds.has(id)) {
+      worktreeIds.add(id);
+      worktreesToProcess.push({ id, path: nwt.path, branch: nwt.branch });
     }
-  );
+  }
 
-  // Build summary
+  // Step 4: Filter to existing paths
+  const existing: typeof worktreesToProcess = [];
+  for (const wt of worktreesToProcess) {
+    try {
+      await fs.access(wt.path);
+      existing.push(wt);
+    } catch {
+      // Path doesn't exist on disk — drop silently
+    }
+  }
+
+  // Step 5: Fill gaps from native scan for each worktree
+  const enriched = await Promise.all(existing.map(async (wt) => {
+    const pd = wt.providerData;
+
+    // Git: use provider data if complete, or scan natively
+    const git = (pd?.git && pd.git.ahead !== undefined && pd.git.behind !== undefined
+      && pd.git.uncommitted !== undefined && pd.git.lastCommit && pd.git.diffStat !== undefined)
+      ? pd.git as GitState
+      : await readGitState(wt.path, projectRoot).catch((): GitState => ({
+          ahead: 0, behind: 0, uncommitted: 0, lastCommit: new Date().toISOString(), diffStat: "",
+        }));
+
+    // Markers: use provider data or scan natively
+    const markers = pd?.markers ?? await scanMarkers(wt.path, config.markers);
+
+    // Agent: use provider data or read from .orra/agents/
+    const agent = pd?.agent
+      ? pd.agent as AgentState
+      : await readAgentState(projectRoot, wt.id);
+
+    // PR: from provider data (will be filled after GitHub enrichment if null)
+    const pr = pd?.pr ?? null;
+
+    // Stage + flags from provider
+    const stage = pd?.stage ?? null;
+    const providerFlags = pd?.flags ?? [];
+    const extras = pd?.extras;
+
+    return { id: wt.id, path: wt.path, branch: wt.branch, git, markers, agent, pr, stage, providerFlags, extras };
+  }));
+
+  // Step 6: Enrich with GitHub PR data for worktrees missing PR info
+  const needsPrEnrichment = enriched.filter(wt => !wt.pr);
+  if (needsPrEnrichment.length > 0) {
+    const prMap = await enrichWithGitHub(needsPrEnrichment.map(wt => ({ branch: wt.branch })));
+    for (const wt of enriched) {
+      if (!wt.pr) {
+        wt.pr = prMap.get(wt.branch) ?? null;
+      }
+    }
+  }
+
+  // Step 7: Apply pipeline detection for worktrees without stage
+  const pipeline = await loadPipeline(projectRoot);
+  if (pipeline) {
+    for (const wt of enriched) {
+      if (!wt.stage) {
+        wt.stage = await detectStage({ path: wt.path, branch: wt.branch }, pipeline);
+      }
+    }
+  }
+
+  // Step 8: Classify
+  const entries: WorktreeScanEntry[] = enriched.map(wt => {
+    const { status, flags } = classify(
+      wt.git, wt.agent, wt.pr,
+      { staleDays: config.staleDays, driftThreshold: config.driftThreshold },
+      wt.stage, wt.providerFlags,
+    );
+    return {
+      id: wt.id,
+      path: wt.path,
+      branch: wt.branch,
+      status,
+      git: wt.git,
+      markers: wt.markers,
+      pr: wt.pr,
+      agent: wt.agent,
+      flags,
+      stage: wt.stage,
+      extras: wt.extras,
+    };
+  });
+
+  // Step 9: Build summary
   const summary = {
     ready_to_land: 0,
     needs_attention: 0,
@@ -365,7 +442,7 @@ export async function scanAll(projectRoot: string): Promise<ScanResult> {
     summary[entry.status]++;
   }
 
-  return { worktrees: entries, summary };
+  return { worktrees: entries, summary, providerStatus };
 }
 
 // ─── inspectOne ───────────────────────────────────────────────────────────────
