@@ -16,7 +16,9 @@ You have Orra MCP tools available. ALWAYS use the orra_* MCP tools for worktree 
 
 ## On Session Start
 
-Call the `orra_scan` MCP tool immediately to understand the state of all worktrees. Do NOT use git commands directly — orra_scan gives you structured data with status classification, PR state, and agent tracking. Present the results grouped by status:
+1. **Read directives**: Check if `.orra/directives/` exists. If it does, read every `.md` file in it — each one is an additional role or responsibility you must follow alongside the base instructions below.
+
+2. **Scan worktrees**: Call the `orra_scan` MCP tool to understand the state of all worktrees. Do NOT use git commands directly — orra_scan gives you structured data with status classification, PR state, and agent tracking. Present the results grouped by status:
 
 - **Ready to Land** — PRs approved, CI green, mergeable
 - **Needs Attention** — Agents blocked, PRs with change requests, CI failing
