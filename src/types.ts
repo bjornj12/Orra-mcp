@@ -1,4 +1,13 @@
 import { z } from "zod";
+import {
+  StageInfoSchema,
+  ProviderStatusSchema,
+  ProviderConfigSchema,
+  ProviderCacheConfigSchema,
+} from "./core/providers/types.js";
+
+export { StageInfoSchema, ProviderStatusSchema };
+export type { StageInfo, ProviderStatus } from "./core/providers/types.js";
 
 export const AgentStatus = z.enum([
   "running",
@@ -18,6 +27,8 @@ export const ConfigSchema = z.object({
   driftThreshold: z.number().default(20),
   defaultModel: z.string().nullable().default(null),
   defaultAgent: z.string().nullable().default(null),
+  providers: z.array(ProviderConfigSchema).default([]),
+  providerCache: ProviderCacheConfigSchema.default({ ttl: 5000 }),
 });
 export type Config = z.infer<typeof ConfigSchema>;
 
@@ -80,6 +91,8 @@ export const WorktreeScanEntrySchema = z.object({
   pr: PrStateSchema.nullable(),
   agent: AgentStateSchema.nullable(),
   flags: z.array(z.string()),
+  stage: StageInfoSchema.nullable().optional(),
+  extras: z.record(z.string(), z.unknown()).optional(),
 });
 export type WorktreeScanEntry = z.infer<typeof WorktreeScanEntrySchema>;
 
@@ -96,5 +109,6 @@ export type ScanSummary = z.infer<typeof ScanSummarySchema>;
 export const ScanResultSchema = z.object({
   worktrees: z.array(WorktreeScanEntrySchema),
   summary: ScanSummarySchema,
+  providerStatus: ProviderStatusSchema.optional(),
 });
 export type ScanResult = z.infer<typeof ScanResultSchema>;

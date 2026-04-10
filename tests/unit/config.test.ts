@@ -11,6 +11,8 @@ const DEFAULTS = {
   driftThreshold: 20,
   defaultModel: null,
   defaultAgent: null,
+  providers: [],
+  providerCache: { ttl: 5000 },
 };
 
 async function makeTmpDir(): Promise<string> {
