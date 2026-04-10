@@ -104,6 +104,8 @@ describe("ConfigSchema", () => {
       driftThreshold: 50,
       defaultModel: "sonnet",
       defaultAgent: "my-agent",
+      providers: [],
+      providerCache: { ttl: 5000 },
     };
     expect(ConfigSchema.parse(config)).toEqual(config);
   });

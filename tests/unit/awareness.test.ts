@@ -131,6 +131,52 @@ describe("classify", () => {
   });
 });
 
+describe("classify with provider flags", () => {
+  it("should classify as needs_attention when flags include blocked", () => {
+    const git: GitState = { ahead: 3, behind: 0, uncommitted: 0, lastCommit: new Date().toISOString(), diffStat: "" };
+    const result = classify(git, null, null, { staleDays: 3, driftThreshold: 20 }, null, ["blocked"]);
+    expect(result.status).toBe("needs_attention");
+    expect(result.flags).toContain("blocked");
+  });
+
+  it("should classify as ready_to_land when flags include ready", () => {
+    const git: GitState = { ahead: 3, behind: 0, uncommitted: 0, lastCommit: new Date().toISOString(), diffStat: "" };
+    const result = classify(git, null, null, { staleDays: 3, driftThreshold: 20 }, null, ["ready"]);
+    expect(result.status).toBe("ready_to_land");
+    expect(result.flags).toContain("ready");
+  });
+
+  it("should pass through provider flags to result", () => {
+    const git: GitState = { ahead: 3, behind: 0, uncommitted: 0, lastCommit: new Date().toISOString(), diffStat: "" };
+    const result = classify(git, null, null, { staleDays: 3, driftThreshold: 20 }, null, ["custom_flag"]);
+    expect(result.flags).toContain("custom_flag");
+  });
+});
+
+describe("classify with stage scoring", () => {
+  it("should classify as needs_attention when stage score is below 85", () => {
+    const git: GitState = { ahead: 3, behind: 0, uncommitted: 0, lastCommit: new Date().toISOString(), diffStat: "" };
+    const stage = { name: "review", metadata: { score: 62 } };
+    const result = classify(git, null, null, { staleDays: 3, driftThreshold: 20 }, stage);
+    expect(result.status).toBe("needs_attention");
+    expect(result.flags).toContain("low_score");
+  });
+
+  it("should not trigger low_score when stage has no score", () => {
+    const git: GitState = { ahead: 3, behind: 0, uncommitted: 0, lastCommit: new Date().toISOString(), diffStat: "" };
+    const stage = { name: "review" };
+    const result = classify(git, null, null, { staleDays: 3, driftThreshold: 20 }, stage);
+    expect(result.status).toBe("idle");
+  });
+
+  it("should not trigger low_score when score is 85 or above", () => {
+    const git: GitState = { ahead: 3, behind: 0, uncommitted: 0, lastCommit: new Date().toISOString(), diffStat: "" };
+    const stage = { name: "review", metadata: { score: 90 } };
+    const result = classify(git, null, null, { staleDays: 3, driftThreshold: 20 }, stage);
+    expect(result.status).toBe("idle");
+  });
+});
+
 // ─── readGitState ─────────────────────────────────────────────────────────────
 
 describe("readGitState", () => {
