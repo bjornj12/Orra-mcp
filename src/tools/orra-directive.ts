@@ -2,10 +2,16 @@ import { z } from "zod";
 import * as fsp from "node:fs/promises";
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const currentDir = path.dirname(fileURLToPath(import.meta.url));
+const examplesDir = path.join(currentDir, "..", "templates", "directives");
 
 export const orraDirectiveSchema = z.object({
-  action: z.enum(["add", "list", "remove"]).describe("add: create a new directive, list: show all directives, remove: delete a directive"),
-  name: z.string().optional().describe("Directive name (for add/remove). Alphanumeric + hyphens."),
+  action: z.enum(["add", "list", "remove", "examples", "install"]).describe(
+    "add: create a new directive, list: show active directives, remove: delete a directive, examples: show available example directives, install: install an example directive by name"
+  ),
+  name: z.string().optional().describe("Directive name (for add/remove/install). Alphanumeric + hyphens."),
   content: z.string().optional().describe("Markdown content for the directive (for add). Describe what the orchestrator should do."),
 });
 
@@ -67,6 +73,45 @@ export async function handleOrraDirective(
         removed: true,
         name: sanitizeName(args.name),
         hint: "Restart the orchestrator session to apply.",
+      });
+    }
+
+    case "examples": {
+      try {
+        const files = await fsp.readdir(examplesDir);
+        const examples = await Promise.all(
+          files.filter(f => f.endsWith(".md")).map(async (f) => {
+            const content = await fsp.readFile(path.join(examplesDir, f), "utf-8");
+            const firstLine = content.split("\n").find(l => l.trim().length > 0) ?? "";
+            return {
+              name: f.replace(".md", ""),
+              description: firstLine.replace(/^#+\s*/, ""),
+            };
+          }),
+        );
+        return ok({ examples, count: examples.length, hint: "Use action 'install' with a name to install one." });
+      } catch {
+        return ok({ examples: [], count: 0 });
+      }
+    }
+
+    case "install": {
+      if (!args.name) return error("'name' is required for install");
+
+      const srcFile = path.join(examplesDir, `${sanitizeName(args.name)}.md`);
+      if (!fs.existsSync(srcFile)) {
+        return error(`Example directive "${args.name}" not found. Use action 'examples' to see available ones.`);
+      }
+
+      const content = await fsp.readFile(srcFile, "utf-8");
+      const destFile = path.join(dirPath, `${sanitizeName(args.name)}.md`);
+      await fsp.writeFile(destFile, content);
+
+      return ok({
+        installed: true,
+        name: sanitizeName(args.name),
+        directive: content,
+        instruction: "IMPORTANT: Follow this directive immediately in the current session. It has also been saved to disk so future sessions will load it automatically.",
       });
     }
   }
