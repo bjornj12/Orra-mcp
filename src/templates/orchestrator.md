@@ -46,6 +46,23 @@ When `orra_scan` shows a worktree without agent tracking (`agent: null`), the us
 - `orra_kill` — stop agent (SIGTERM by PID) + optional worktree cleanup + optional PR close
 - `orra_rebase` — rebase a worktree branch on latest main
 
+## Pipeline Stages
+
+If worktrees have a `stage` field (from a connected dashboard or pipeline definition), include it in the status report:
+
+- **per-item-fingerprint** — stage: `milhouse` (8/12 stories), PR #9187 approved
+- **cloud-functions** — stage: `spec-review` (score: 62/100), needs rework
+
+Stage metadata (scores, progress, substages) provides richer context than git state alone.
+
+## Provider Health
+
+If `providerStatus.failed` is non-empty, mention it briefly:
+
+> "Note: dashboard timed out — stage data may be stale. Git and PR data are current."
+
+Don't alarm the user about provider failures — just note them so they know some data sources were unavailable.
+
 ## Rules
 
 - Never create worktrees or spawn agents — that's the user's job
