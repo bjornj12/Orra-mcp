@@ -182,3 +182,11 @@ export async function getOrComputeSummary(
 
   return computeFresh(agentId, agent, deps);
 }
+
+export async function invalidateSummary(agentId: string, stateDir: string): Promise<void> {
+  try {
+    await fs.unlink(summaryPath(stateDir, agentId));
+  } catch {
+    // missing file is fine
+  }
+}

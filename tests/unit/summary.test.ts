@@ -4,6 +4,7 @@ import * as path from "node:path";
 import * as os from "node:os";
 import {
   getOrComputeSummary,
+  invalidateSummary,
   CURRENT_SUMMARY_SCHEMA_VERSION,
   MAX_TAIL_BYTES,
 } from "../../src/core/summary.js";
@@ -303,5 +304,26 @@ describe("getOrComputeSummary — scoring", () => {
 
     expect(summary.needsAttentionScore).toBeLessThanOrEqual(100);
     expect(summary.needsAttentionScore).toBeGreaterThan(50);
+  });
+});
+
+describe("invalidateSummary", () => {
+  it("deletes the summary file for an agent", async () => {
+    await fs.writeFile(path.join(agentsDir, "agent-1.log"), "Tests: 3 passed");
+    await getOrComputeSummary("agent-1", fakeAgent, {
+      stateDir: agentsDir,
+      now: () => new Date(),
+    });
+
+    const sumFile = path.join(agentsDir, "agent-1.summary.json");
+    await expect(fs.access(sumFile)).resolves.toBeUndefined();
+
+    await invalidateSummary("agent-1", agentsDir);
+
+    await expect(fs.access(sumFile)).rejects.toThrow();
+  });
+
+  it("is a no-op when no summary file exists", async () => {
+    await expect(invalidateSummary("nonexistent", agentsDir)).resolves.toBeUndefined();
   });
 });
