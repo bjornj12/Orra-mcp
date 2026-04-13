@@ -28,6 +28,7 @@ export function classify(
   opts: { staleDays: number; driftThreshold: number },
   stage?: StageInfo | null,
   providerFlags?: string[],
+  summary?: import("../types.js").AgentSummary,
 ): { status: WorktreeStatus; flags: string[] } {
   const flags: string[] = [...(providerFlags ?? [])];
 
@@ -38,6 +39,11 @@ export function classify(
   // Rule 0a: Provider flags take precedence
   if (flags.includes("blocked")) return { status: "needs_attention", flags };
   if (flags.includes("ready")) return { status: "ready_to_land", flags };
+
+  // Rule 0b: Summary-driven escalation (agent is stuck or needs attention)
+  if (summary && (summary.needsAttentionScore >= 60 || summary.likelyStuckReason)) {
+    return { status: "needs_attention", flags };
+  }
 
   // 1. Pending question
   if (agent?.pendingQuestion != null) {
@@ -421,7 +427,7 @@ export async function scanAll(projectRoot: string): Promise<ScanResult> {
     const { status, flags } = classify(
       wt.git, wt.agent, wt.pr,
       { staleDays: config.staleDays, driftThreshold: config.driftThreshold },
-      wt.stage, wt.providerFlags,
+      wt.stage, wt.providerFlags, summary,
     );
     return {
       id: wt.id,
