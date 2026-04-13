@@ -83,3 +83,75 @@ describe("parseLog — lastTestResult", () => {
     expect(parseLog("building...\ndone").lastTestResult).toBe("unknown");
   });
 });
+
+describe("parseLog — lastFileEdited", () => {
+  it("picks up 'modified: <path>'", () => {
+    expect(parseLog("modified: src/foo.ts").lastFileEdited).toBe("src/foo.ts");
+  });
+
+  it("picks up 'edited: <path>'", () => {
+    expect(parseLog("edited: lib/bar.ts").lastFileEdited).toBe("lib/bar.ts");
+  });
+
+  it("picks up 'wrote <path>'", () => {
+    expect(parseLog("wrote README.md").lastFileEdited).toBe("README.md");
+  });
+
+  it("most recent match wins", () => {
+    const log = "modified: src/a.ts\nbuilding\nmodified: src/b.ts";
+    expect(parseLog(log).lastFileEdited).toBe("src/b.ts");
+  });
+
+  it("null when no match", () => {
+    expect(parseLog("hello world").lastFileEdited).toBeNull();
+  });
+});
+
+describe("parseLog — errorPattern", () => {
+  it("detects ENOENT family", () => {
+    expect(parseLog("Error: ENOENT: no such file").errorPattern).toBe("ENOENT");
+  });
+
+  it("detects ECONNREFUSED family", () => {
+    expect(parseLog("connect ECONNREFUSED 127.0.0.1:3000").errorPattern).toBe("ECONNREFUSED");
+  });
+
+  it("detects command not found", () => {
+    expect(parseLog("/bin/sh: foo: command not found").errorPattern).toBe("command_not_found");
+  });
+
+  it("detects permission denied", () => {
+    expect(parseLog("bash: /etc/hosts: Permission denied").errorPattern).toBe("permission_denied");
+  });
+
+  it("detects timeout", () => {
+    expect(parseLog("Request timed out after 30s").errorPattern).toBe("timeout");
+  });
+
+  it("null when no error", () => {
+    expect(parseLog("everything is fine").errorPattern).toBeNull();
+  });
+});
+
+describe("parseLog — loopDetected", () => {
+  it("true when one line repeats 3x in tail", () => {
+    const log = Array(22).fill("unique").concat(["same", "same", "same"]).join("\n");
+    expect(parseLog(log).loopDetected).toBe(true);
+  });
+
+  it("false when no repetition", () => {
+    const log = Array.from({ length: 20 }, (_, i) => `line-${i}`).join("\n");
+    expect(parseLog(log).loopDetected).toBe(false);
+  });
+
+  it("false when repetition is below threshold (2x)", () => {
+    const log = "a\nb\na\nb\nc\nd".split("").join("\n");
+    expect(parseLog(log).loopDetected).toBe(false);
+  });
+
+  it("only counts within last 20 non-blank lines", () => {
+    // 3 repeats far in the past, not in tail
+    const log = ["x", "x", "x", ...Array.from({ length: 25 }, (_, i) => `line-${i}`)].join("\n");
+    expect(parseLog(log).loopDetected).toBe(false);
+  });
+});
