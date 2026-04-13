@@ -7,6 +7,8 @@ import {
   PrStateSchema,
   WorktreeStatusSchema,
   ScanResultSchema,
+  AgentSummarySchema,
+  WorktreeScanEntrySchema,
   type AgentState,
   type Config,
   type GitState,
@@ -311,5 +313,63 @@ describe("ScanResultSchema", () => {
     const parsed = ScanResultSchema.parse(result);
     expect(parsed.worktrees[0].pr).toBeNull();
     expect(parsed.worktrees[0].agent).toBeNull();
+  });
+});
+
+describe("AgentSummarySchema", () => {
+  it("accepts a minimal valid summary", () => {
+    const input = {
+      agentId: "abc",
+      summarizedAt: "2026-04-13T10:00:00.000Z",
+      logMtime: "2026-04-13T09:59:00.000Z",
+      schemaVersion: 1,
+      oneLine: "Writing integration tests",
+      needsAttentionScore: 15,
+      likelyStuckReason: null,
+      lastTestResult: "unknown",
+      lastFileEdited: null,
+      lastActivityAt: "2026-04-13T09:59:00.000Z",
+      tailLines: ["running: npm test", "PASS: src/foo.test.ts"],
+    };
+    expect(() => AgentSummarySchema.parse(input)).not.toThrow();
+  });
+
+  it("rejects needsAttentionScore outside 0–100", () => {
+    const bad = {
+      agentId: "abc",
+      summarizedAt: "2026-04-13T10:00:00.000Z",
+      logMtime: "2026-04-13T09:59:00.000Z",
+      schemaVersion: 1,
+      oneLine: "",
+      needsAttentionScore: 150,
+      likelyStuckReason: null,
+      lastTestResult: "unknown",
+      lastFileEdited: null,
+      lastActivityAt: null,
+      tailLines: [],
+    };
+    expect(() => AgentSummarySchema.parse(bad)).toThrow();
+  });
+
+  it("allows WorktreeScanEntry to include an optional summary", () => {
+    const entry = {
+      id: "wt-1", path: "/tmp/wt-1", branch: "feature/x", status: "idle",
+      git: { ahead: 0, behind: 0, uncommitted: 0, lastCommit: "2026-04-13T00:00:00.000Z", diffStat: "" },
+      markers: [], pr: null, agent: null, flags: [],
+      summary: {
+        agentId: "abc",
+        summarizedAt: "2026-04-13T10:00:00.000Z",
+        logMtime: "2026-04-13T09:59:00.000Z",
+        schemaVersion: 1,
+        oneLine: "hi",
+        needsAttentionScore: 0,
+        likelyStuckReason: null,
+        lastTestResult: "unknown",
+        lastFileEdited: null,
+        lastActivityAt: null,
+        tailLines: [],
+      },
+    };
+    expect(() => WorktreeScanEntrySchema.parse(entry)).not.toThrow();
   });
 });
