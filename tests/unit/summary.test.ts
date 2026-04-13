@@ -5,6 +5,7 @@ import * as os from "node:os";
 import {
   getOrComputeSummary,
   CURRENT_SUMMARY_SCHEMA_VERSION,
+  MAX_TAIL_BYTES,
 } from "../../src/core/summary.js";
 import type { AgentState } from "../../src/types.js";
 
@@ -178,5 +179,39 @@ describe("getOrComputeSummary — invalidation", () => {
     // And the garbage file should have been replaced with a valid one
     const after = await fs.readFile(path.join(agentsDir, "agent-1.summary.json"), "utf-8");
     expect(() => JSON.parse(after)).not.toThrow();
+  });
+});
+
+describe("getOrComputeSummary — bounded tail read", () => {
+  it("only reads the last MAX_TAIL_BYTES of a huge log", async () => {
+    const logFile = path.join(agentsDir, "agent-1.log");
+
+    // Write 200KB of filler followed by a test-result marker at the end
+    const filler = "x".repeat(200 * 1024);
+    const body = filler + "\nTests: 1 failed\n";
+    await fs.writeFile(logFile, body);
+
+    const stat = await fs.stat(logFile);
+    expect(stat.size).toBeGreaterThan(MAX_TAIL_BYTES);
+
+    const result = await getOrComputeSummary("agent-1", fakeAgent, {
+      stateDir: agentsDir,
+      now: () => new Date("2026-04-13T10:00:00.000Z"),
+    });
+
+    // The marker is within the tail window → should still be detected
+    expect(result.lastTestResult).toBe("fail");
+  });
+
+  it("works when the log is smaller than MAX_TAIL_BYTES", async () => {
+    const logFile = path.join(agentsDir, "agent-1.log");
+    await fs.writeFile(logFile, "Tests: 3 passed");
+
+    const result = await getOrComputeSummary("agent-1", fakeAgent, {
+      stateDir: agentsDir,
+      now: () => new Date(),
+    });
+
+    expect(result.lastTestResult).toBe("pass");
   });
 });
