@@ -93,6 +93,29 @@ function deriveStuckReason(
   return null;
 }
 
+async function tryReadCachedSummary(
+  stateDir: string,
+  agentId: string,
+): Promise<AgentSummary | null> {
+  try {
+    const raw = await fs.readFile(summaryPath(stateDir, agentId), "utf-8");
+    const parsed = JSON.parse(raw) as AgentSummary;
+    if (parsed.schemaVersion !== CURRENT_SUMMARY_SCHEMA_VERSION) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+async function currentLogMtime(stateDir: string, agentId: string): Promise<string | null> {
+  try {
+    const s = await fs.stat(logPath(stateDir, agentId));
+    return s.mtime.toISOString();
+  } catch {
+    return null;
+  }
+}
+
 async function writeSummaryAtomic(file: string, summary: AgentSummary): Promise<void> {
   const tmp = file + ".tmp";
   await fs.writeFile(tmp, JSON.stringify(summary, null, 2));
@@ -148,5 +171,14 @@ export async function getOrComputeSummary(
   agent: AgentState,
   deps: SummaryComputeDeps,
 ): Promise<AgentSummary> {
+  const [cached, mtime] = await Promise.all([
+    tryReadCachedSummary(deps.stateDir, agentId),
+    currentLogMtime(deps.stateDir, agentId),
+  ]);
+
+  if (cached && mtime && cached.logMtime === mtime) {
+    return cached;
+  }
+
   return computeFresh(agentId, agent, deps);
 }

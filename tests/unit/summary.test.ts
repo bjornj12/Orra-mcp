@@ -74,3 +74,54 @@ describe("getOrComputeSummary — cache miss", () => {
     expect(summary.needsAttentionScore).toBeGreaterThanOrEqual(0);
   });
 });
+
+describe("getOrComputeSummary — cache hit", () => {
+  it("returns cached summary without re-parsing when log mtime matches", async () => {
+    const logFile = path.join(agentsDir, "agent-1.log");
+    await fs.writeFile(logFile, "Tests: 3 passed");
+
+    // First call — cold, writes summary file
+    const first = await getOrComputeSummary("agent-1", fakeAgent, {
+      stateDir: agentsDir,
+      now: () => new Date("2026-04-13T10:00:00.000Z"),
+    });
+
+    // Capture the summary file's contents
+    const sumFile = path.join(agentsDir, "agent-1.summary.json");
+    const firstWritten = await fs.readFile(sumFile, "utf-8");
+
+    // Second call — should NOT rewrite the file
+    const second = await getOrComputeSummary("agent-1", fakeAgent, {
+      stateDir: agentsDir,
+      now: () => new Date("2026-04-13T10:05:00.000Z"), // different "now"
+    });
+
+    const secondWritten = await fs.readFile(sumFile, "utf-8");
+
+    expect(secondWritten).toBe(firstWritten); // unchanged
+    expect(second.summarizedAt).toBe(first.summarizedAt); // not re-timestamped
+  });
+
+  it("recomputes when log mtime advances", async () => {
+    const logFile = path.join(agentsDir, "agent-1.log");
+    await fs.writeFile(logFile, "Tests: 3 passed");
+
+    const first = await getOrComputeSummary("agent-1", fakeAgent, {
+      stateDir: agentsDir,
+      now: () => new Date("2026-04-13T10:00:00.000Z"),
+    });
+
+    // Wait a tick, then touch the log with new content
+    await new Promise((r) => setTimeout(r, 20));
+    await fs.writeFile(logFile, "Tests: 3 passed\nTests: 1 failed");
+
+    const second = await getOrComputeSummary("agent-1", fakeAgent, {
+      stateDir: agentsDir,
+      now: () => new Date("2026-04-13T10:05:00.000Z"),
+    });
+
+    expect(first.lastTestResult).toBe("pass");
+    expect(second.lastTestResult).toBe("fail");
+    expect(second.summarizedAt).toBe("2026-04-13T10:05:00.000Z");
+  });
+});
