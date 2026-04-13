@@ -334,7 +334,7 @@ describe("AgentSummarySchema", () => {
     expect(() => AgentSummarySchema.parse(input)).not.toThrow();
   });
 
-  it("rejects needsAttentionScore outside 0–100", () => {
+  it("rejects needsAttentionScore above 100", () => {
     const bad = {
       agentId: "abc",
       summarizedAt: "2026-04-13T10:00:00.000Z",
@@ -342,6 +342,23 @@ describe("AgentSummarySchema", () => {
       schemaVersion: 1,
       oneLine: "",
       needsAttentionScore: 150,
+      likelyStuckReason: null,
+      lastTestResult: "unknown",
+      lastFileEdited: null,
+      lastActivityAt: null,
+      tailLines: [],
+    };
+    expect(() => AgentSummarySchema.parse(bad)).toThrow();
+  });
+
+  it("rejects needsAttentionScore below 0", () => {
+    const bad = {
+      agentId: "abc",
+      summarizedAt: "2026-04-13T10:00:00.000Z",
+      logMtime: "2026-04-13T09:59:00.000Z",
+      schemaVersion: 1,
+      oneLine: "",
+      needsAttentionScore: -1,
       likelyStuckReason: null,
       lastTestResult: "unknown",
       lastFileEdited: null,
