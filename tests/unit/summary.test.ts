@@ -215,3 +215,93 @@ describe("getOrComputeSummary — bounded tail read", () => {
     expect(result.lastTestResult).toBe("pass");
   });
 });
+
+describe("getOrComputeSummary — scoring", () => {
+  it("scores ≥ 50 when pendingQuestion is set", async () => {
+    const logFile = path.join(agentsDir, "agent-1.log");
+    await fs.writeFile(logFile, "waiting for approval");
+
+    const agentWithQ: AgentState = {
+      ...fakeAgent,
+      status: "waiting",
+      pendingQuestion: { tool: "Bash", input: { command: "rm -rf /" } },
+    };
+
+    const summary = await getOrComputeSummary("agent-1", agentWithQ, {
+      stateDir: agentsDir,
+      now: () => new Date(),
+    });
+
+    expect(summary.needsAttentionScore).toBeGreaterThanOrEqual(50);
+    expect(summary.likelyStuckReason).toBe("awaiting permission: Bash");
+  });
+
+  it("scores higher when loopDetected and errorPattern both present", async () => {
+    const logFile = path.join(agentsDir, "agent-1.log");
+    const loop = Array(5).fill("ENOENT: no such file src/foo.ts").join("\n");
+    await fs.writeFile(logFile, loop);
+
+    const summary = await getOrComputeSummary("agent-1", fakeAgent, {
+      stateDir: agentsDir,
+      now: () => new Date(fakeAgent.updatedAt), // not idle-stuck
+    });
+
+    // Loop (15) + error (15) = at least 30
+    expect(summary.needsAttentionScore).toBeGreaterThanOrEqual(30);
+    expect(summary.likelyStuckReason).not.toBeNull();
+  });
+
+  it("scores idle+pass as low", async () => {
+    const logFile = path.join(agentsDir, "agent-1.log");
+    await fs.writeFile(logFile, "Tests: 3 passed\nDone.");
+
+    const idleAgent: AgentState = { ...fakeAgent, status: "idle" };
+    const summary = await getOrComputeSummary("agent-1", idleAgent, {
+      stateDir: agentsDir,
+      now: () => new Date(fakeAgent.updatedAt),
+    });
+
+    expect(summary.needsAttentionScore).toBeLessThanOrEqual(20);
+  });
+
+  it("adds no-output penalty when running agent is idle > 10 minutes", async () => {
+    const logFile = path.join(agentsDir, "agent-1.log");
+    await fs.writeFile(logFile, "doing stuff");
+
+    const runningStale: AgentState = {
+      ...fakeAgent,
+      status: "running",
+      updatedAt: "2026-04-13T09:00:00.000Z",
+    };
+
+    const summary = await getOrComputeSummary("agent-1", runningStale, {
+      stateDir: agentsDir,
+      now: () => new Date("2026-04-13T09:30:00.000Z"), // 30 minutes later
+    });
+
+    expect(summary.needsAttentionScore).toBeGreaterThanOrEqual(20);
+    expect(summary.likelyStuckReason).toMatch(/no output for \d+m/);
+  });
+
+  it("clamps score to 0–100", async () => {
+    // Pile up everything
+    const logFile = path.join(agentsDir, "agent-1.log");
+    const worst = Array(5).fill("ENOENT").join("\n");
+    await fs.writeFile(logFile, worst);
+
+    const worstAgent: AgentState = {
+      ...fakeAgent,
+      status: "failed",
+      pendingQuestion: { tool: "Edit", input: {} },
+      updatedAt: "2026-04-13T09:00:00.000Z",
+    };
+
+    const summary = await getOrComputeSummary("agent-1", worstAgent, {
+      stateDir: agentsDir,
+      now: () => new Date("2026-04-13T10:00:00.000Z"),
+    });
+
+    expect(summary.needsAttentionScore).toBeLessThanOrEqual(100);
+    expect(summary.needsAttentionScore).toBeGreaterThan(50);
+  });
+});
