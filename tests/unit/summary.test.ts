@@ -125,3 +125,58 @@ describe("getOrComputeSummary — cache hit", () => {
     expect(second.summarizedAt).toBe("2026-04-13T10:05:00.000Z");
   });
 });
+
+describe("getOrComputeSummary — invalidation", () => {
+  it("recomputes when cached summary has an old schema version", async () => {
+    const logFile = path.join(agentsDir, "agent-1.log");
+    await fs.writeFile(logFile, "Tests: 3 passed");
+
+    // Plant a summary file with an intentionally old schema version
+    const planted = {
+      agentId: "agent-1",
+      summarizedAt: "2020-01-01T00:00:00.000Z",
+      logMtime: (await fs.stat(logFile)).mtime.toISOString(),
+      schemaVersion: 0, // stale
+      oneLine: "stale summary",
+      needsAttentionScore: 0,
+      likelyStuckReason: null,
+      lastTestResult: "unknown",
+      lastFileEdited: null,
+      lastActivityAt: null,
+      tailLines: [],
+    };
+    await fs.writeFile(
+      path.join(agentsDir, "agent-1.summary.json"),
+      JSON.stringify(planted),
+    );
+
+    const result = await getOrComputeSummary("agent-1", fakeAgent, {
+      stateDir: agentsDir,
+      now: () => new Date("2026-04-13T10:00:00.000Z"),
+    });
+
+    expect(result.schemaVersion).toBe(CURRENT_SUMMARY_SCHEMA_VERSION);
+    expect(result.lastTestResult).toBe("pass"); // recomputed fresh
+  });
+
+  it("recovers from a corrupt (non-JSON) summary file", async () => {
+    const logFile = path.join(agentsDir, "agent-1.log");
+    await fs.writeFile(logFile, "Tests: 3 passed");
+    await fs.writeFile(
+      path.join(agentsDir, "agent-1.summary.json"),
+      "this is not JSON { } [",
+    );
+
+    const result = await getOrComputeSummary("agent-1", fakeAgent, {
+      stateDir: agentsDir,
+      now: () => new Date("2026-04-13T10:00:00.000Z"),
+    });
+
+    expect(result.lastTestResult).toBe("pass");
+    expect(result.schemaVersion).toBe(CURRENT_SUMMARY_SCHEMA_VERSION);
+
+    // And the garbage file should have been replaced with a valid one
+    const after = await fs.readFile(path.join(agentsDir, "agent-1.summary.json"), "utf-8");
+    expect(() => JSON.parse(after)).not.toThrow();
+  });
+});
