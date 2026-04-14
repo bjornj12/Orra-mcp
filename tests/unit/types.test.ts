@@ -108,6 +108,7 @@ describe("ConfigSchema", () => {
       defaultAgent: "my-agent",
       providers: [],
       providerCache: { ttl: 5000 },
+      headlessSpawnConcurrency: 3,
     };
     expect(ConfigSchema.parse(config)).toEqual(config);
   });
@@ -388,5 +389,29 @@ describe("AgentSummarySchema", () => {
       },
     };
     expect(() => WorktreeScanEntrySchema.parse(entry)).not.toThrow();
+  });
+});
+
+describe("ConfigSchema — headlessSpawnConcurrency", () => {
+  it("accepts a positive integer", () => {
+    expect(() => ConfigSchema.parse({ headlessSpawnConcurrency: 5 })).not.toThrow();
+  });
+
+  it("defaults to 3 when omitted", () => {
+    const result = ConfigSchema.parse({});
+    expect(result.headlessSpawnConcurrency).toBe(3);
+  });
+
+  it("accepts 0 (disables headless spawning)", () => {
+    const result = ConfigSchema.parse({ headlessSpawnConcurrency: 0 });
+    expect(result.headlessSpawnConcurrency).toBe(0);
+  });
+
+  it("rejects negative values", () => {
+    expect(() => ConfigSchema.parse({ headlessSpawnConcurrency: -1 })).toThrow();
+  });
+
+  it("rejects non-integer values", () => {
+    expect(() => ConfigSchema.parse({ headlessSpawnConcurrency: 2.5 })).toThrow();
   });
 });
