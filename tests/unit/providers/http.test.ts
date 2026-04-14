@@ -14,7 +14,7 @@ describe("HttpProvider", () => {
     vi.mocked(fetch).mockResolvedValue({
       ok: true,
       json: async () => ({
-        orraProtocolVersion: "1.0",
+        protocolVersion: "1.0",
         worktrees: [{ id: "feat-a", path: "/tmp/feat-a", branch: "feat/a" }],
       }),
     } as Response);
@@ -35,7 +35,7 @@ describe("HttpProvider", () => {
 
     vi.mocked(fetch).mockResolvedValue({
       ok: true,
-      json: async () => ({ orraProtocolVersion: "1.0", worktrees: [] }),
+      json: async () => ({ protocolVersion: "1.0", worktrees: [] }),
     } as Response);
 
     const provider = createHttpProvider({

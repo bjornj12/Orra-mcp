@@ -3,7 +3,7 @@ import { mergeProviderResults, checkProtocolVersion } from "../../../src/core/pr
 import type { ProviderResult, ProviderWorktree } from "../../../src/core/providers/types.js";
 
 function makeResult(worktrees: ProviderWorktree[], version = "1.0"): ProviderResult {
-  return { orraProtocolVersion: version, worktrees };
+  return { protocolVersion: version, worktrees };
 }
 
 describe("mergeProviderResults", () => {

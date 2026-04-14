@@ -42,7 +42,7 @@ describe("Provider Integration", () => {
     execSync("git add file.ts && git commit -m 'add'", { cwd: wtPath });
 
     fs.writeFileSync(path.join(tmpDir, ".orra", "state.json"), JSON.stringify({
-      orraProtocolVersion: "1.0",
+      protocolVersion: "1.0",
       worktrees: [{
         id: "feat-a",
         path: wtPath,
@@ -86,7 +86,7 @@ describe("Provider Integration", () => {
     execSync("git add file.ts && git commit -m 'add'", { cwd: wtPath });
 
     fs.writeFileSync(path.join(tmpDir, ".orra", "state.json"), JSON.stringify({
-      orraProtocolVersion: "1.0",
+      protocolVersion: "1.0",
       worktrees: [{
         id: "blocked-wt",
         path: wtPath,

@@ -135,8 +135,8 @@ export async function fetchAndMergeProviders(
 
     if (result.status === "fulfilled") {
       const { data, cached } = result.value;
-      if (!checkProtocolVersion(data.orraProtocolVersion, providers[i].config.minProtocolVersion)) {
-        failed.push({ provider: name, error: `incompatible protocol version: ${data.orraProtocolVersion}` });
+      if (!checkProtocolVersion(data.protocolVersion, providers[i].config.minProtocolVersion)) {
+        failed.push({ provider: name, error: `incompatible protocol version: ${data.protocolVersion}` });
         continue;
       }
       results.push(data);

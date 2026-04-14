@@ -107,7 +107,7 @@ export const ProviderMetaSchema = z.object({
 });
 
 export const ProviderResultSchema = z.object({
-  orraProtocolVersion: z.string().default("1.0"),
+  protocolVersion: z.string().default("1.0"),
   worktrees: z.array(ProviderWorktreeSchema),
   provider: ProviderMetaSchema.optional(),
 });

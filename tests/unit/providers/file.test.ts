@@ -18,7 +18,7 @@ describe("FileProvider", () => {
   it("should read and parse valid state file", async () => {
     const statePath = path.join(tmpDir, "state.json");
     fs.writeFileSync(statePath, JSON.stringify({
-      orraProtocolVersion: "1.0",
+      protocolVersion: "1.0",
       worktrees: [{ id: "feat-a", path: "/tmp/feat-a", branch: "feat/a" }],
     }));
 
@@ -32,7 +32,7 @@ describe("FileProvider", () => {
     const orraDir = path.join(tmpDir, ".orra");
     fs.mkdirSync(orraDir, { recursive: true });
     fs.writeFileSync(path.join(orraDir, "state.json"), JSON.stringify({
-      orraProtocolVersion: "1.0",
+      protocolVersion: "1.0",
       worktrees: [],
     }));
 

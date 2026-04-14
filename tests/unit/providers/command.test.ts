@@ -18,7 +18,7 @@ describe("CommandProvider", () => {
   it("should use array syntax with echo (no shell eval)", async () => {
     const provider = createCommandProvider({
       type: "command",
-      command: ["echo", '{"orraProtocolVersion":"1.0","worktrees":[]}'],
+      command: ["echo", '{"protocolVersion":"1.0","worktrees":[]}'],
       timeout: 5000,
     }, tmpDir);
 
@@ -28,7 +28,7 @@ describe("CommandProvider", () => {
 
   it("should execute script and parse stdout as JSON", async () => {
     const scriptPath = path.join(tmpDir, "provider.sh");
-    fs.writeFileSync(scriptPath, '#!/bin/bash\necho \'{"orraProtocolVersion":"1.0","worktrees":[{"id":"test","path":"/tmp/test","branch":"main"}]}\'', { mode: 0o755 });
+    fs.writeFileSync(scriptPath, '#!/bin/bash\necho \'{"protocolVersion":"1.0","worktrees":[{"id":"test","path":"/tmp/test","branch":"main"}]}\'', { mode: 0o755 });
 
     const provider = createCommandProvider({
       type: "command",
@@ -57,7 +57,7 @@ describe("CommandProvider", () => {
 
     const provider = createCommandProvider({
       type: "command",
-      command: ["sh", "-c", 'echo \'{"orraProtocolVersion":"1.0","worktrees":[{"id":"\'$(basename $(pwd))\'","path":"\'$(pwd)\'","branch":"main"}]}\''],
+      command: ["sh", "-c", 'echo \'{"protocolVersion":"1.0","worktrees":[{"id":"\'$(basename $(pwd))\'","path":"\'$(pwd)\'","branch":"main"}]}\''],
       cwd: subDir,
       timeout: 5000,
     }, tmpDir);
