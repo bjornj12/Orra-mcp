@@ -104,3 +104,37 @@ describe("AgentManager.spawnAgent — existing worktree", () => {
     expect(state.exitCode).toBe(2);
   });
 });
+
+describe("AgentManager.spawnAgent — new worktree", () => {
+  it("creates a new worktree when worktreeId is omitted", async () => {
+    const result = await manager.spawnAgent({
+      task: "do something fresh",
+      reason: "needs a clean workspace",
+      _spawnCommand: ["node", "-e", "process.exit(0);"],
+    });
+
+    // WorktreeManager.create returns path.join(projectRoot, ...) — unresolved path
+    const expectedPath = path.join(projectDir, "worktrees", result.agentId);
+    expect(result.worktreePath).toBe(expectedPath);
+    expect(result.branch).toBe(`orra/${result.agentId}`);
+
+    // The new worktree directory should exist
+    const stat = await fs.stat(result.worktreePath);
+    expect(stat.isDirectory()).toBe(true);
+
+    // git worktree list should show it
+    const wtList = execSync("git worktree list --porcelain", { cwd: projectDir, encoding: "utf-8" });
+    expect(wtList).toContain(result.worktreePath);
+  });
+
+  it("respects a custom branch name", async () => {
+    const result = await manager.spawnAgent({
+      task: "custom branch task",
+      reason: "user specified branch",
+      branch: "feat/my-custom-branch",
+      _spawnCommand: ["node", "-e", "process.exit(0);"],
+    });
+
+    expect(result.branch).toBe("feat/my-custom-branch");
+  });
+});
