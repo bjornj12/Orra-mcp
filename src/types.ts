@@ -81,6 +81,21 @@ export const AgentStateSchema = z.object({
 });
 export type AgentState = z.infer<typeof AgentStateSchema>;
 
+export const AgentSummarySchema = z.object({
+  agentId: z.string(),
+  summarizedAt: z.string(),
+  logMtime: z.string(),
+  schemaVersion: z.literal(1),
+  oneLine: z.string(),
+  needsAttentionScore: z.number().min(0).max(100),
+  likelyStuckReason: z.string().nullable(),
+  lastTestResult: z.enum(["pass", "fail", "unknown"]),
+  lastFileEdited: z.string().nullable(),
+  lastActivityAt: z.string().nullable(),
+  tailLines: z.array(z.string()),
+});
+export type AgentSummary = z.infer<typeof AgentSummarySchema>;
+
 export const WorktreeScanEntrySchema = z.object({
   id: z.string(),
   path: z.string(),
@@ -93,6 +108,7 @@ export const WorktreeScanEntrySchema = z.object({
   flags: z.array(z.string()),
   stage: StageInfoSchema.nullable().optional(),
   extras: z.record(z.string(), z.unknown()).optional(),
+  summary: AgentSummarySchema.optional(),
 });
 export type WorktreeScanEntry = z.infer<typeof WorktreeScanEntrySchema>;
 

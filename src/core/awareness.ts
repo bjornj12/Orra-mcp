@@ -15,6 +15,7 @@ import { loadConfig } from "./config.js";
 import { buildProviders, fetchAndMergeProviders } from "./providers/index.js";
 import type { ProviderWorktree, StageInfo } from "./providers/types.js";
 import { loadPipeline, detectStage } from "./pipeline.js";
+import { getOrComputeSummary } from "./summary.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -27,6 +28,7 @@ export function classify(
   opts: { staleDays: number; driftThreshold: number },
   stage?: StageInfo | null,
   providerFlags?: string[],
+  summary?: import("../types.js").AgentSummary,
 ): { status: WorktreeStatus; flags: string[] } {
   const flags: string[] = [...(providerFlags ?? [])];
 
@@ -37,6 +39,11 @@ export function classify(
   // Rule 0a: Provider flags take precedence
   if (flags.includes("blocked")) return { status: "needs_attention", flags };
   if (flags.includes("ready")) return { status: "ready_to_land", flags };
+
+  // Rule 0b: Summary-driven escalation (agent is stuck or needs attention)
+  if (summary && (summary.needsAttentionScore >= 60 || summary.likelyStuckReason)) {
+    return { status: "needs_attention", flags };
+  }
 
   // 1. Pending question
   if (agent?.pendingQuestion != null) {
@@ -407,12 +414,20 @@ export async function scanAll(projectRoot: string): Promise<ScanResult> {
     }
   }
 
-  // Step 8: Classify
-  const entries: WorktreeScanEntry[] = enriched.map(wt => {
+  // Step 8: Compute per-agent summary, then classify
+  const orraAgentsDir = path.join(projectRoot, ".orra", "agents");
+  const now = () => new Date();
+
+  const entries: WorktreeScanEntry[] = await Promise.all(enriched.map(async (wt) => {
+    const summary = wt.agent
+      ? await getOrComputeSummary(wt.agent.id, wt.agent, { stateDir: orraAgentsDir, now })
+          .catch(() => undefined)
+      : undefined;
+
     const { status, flags } = classify(
       wt.git, wt.agent, wt.pr,
       { staleDays: config.staleDays, driftThreshold: config.driftThreshold },
-      wt.stage, wt.providerFlags,
+      wt.stage, wt.providerFlags, summary,
     );
     return {
       id: wt.id,
@@ -426,8 +441,9 @@ export async function scanAll(projectRoot: string): Promise<ScanResult> {
       flags,
       stage: wt.stage,
       extras: wt.extras,
+      summary,
     };
-  });
+  }));
 
   // Step 9: Build summary
   const summary = {

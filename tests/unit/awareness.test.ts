@@ -5,7 +5,7 @@ import * as path from "node:path";
 import * as os from "node:os";
 import { execSync } from "node:child_process";
 import { classify, readGitState, scanMarkers, readAgentState } from "../../src/core/awareness.js";
-import type { GitState, AgentState, PrState } from "../../src/types.js";
+import type { GitState, AgentState, PrState, AgentSummary } from "../../src/types.js";
 
 // ─── classify ────────────────────────────────────────────────────────────────
 
@@ -383,5 +383,51 @@ describe("readAgentState", () => {
     expect(result).not.toBeNull();
     expect(result!.pendingQuestion).not.toBeNull();
     expect(result!.pendingQuestion!.tool).toBe("Bash");
+  });
+});
+
+// ─── classify — summary-driven escalation ────────────────────────────────────
+
+describe("classify — summary-driven escalation", () => {
+  const agent: AgentState = {
+    id: "a", task: "t", branch: "b", worktree: "/w", pid: 1, status: "running",
+    agentPersona: null, model: null,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    exitCode: null, pendingQuestion: null,
+  };
+
+  const passingSummary: AgentSummary = {
+    agentId: "a", summarizedAt: new Date().toISOString(),
+    logMtime: new Date().toISOString(), schemaVersion: 1,
+    oneLine: "running tests", needsAttentionScore: 10,
+    likelyStuckReason: null, lastTestResult: "pass",
+    lastFileEdited: null, lastActivityAt: null, tailLines: [],
+  };
+
+  const stuckSummary: AgentSummary = {
+    ...passingSummary,
+    needsAttentionScore: 75,
+    likelyStuckReason: "loop: same line × 5 in tail",
+    lastTestResult: "fail",
+  };
+
+  it("in_progress when summary is healthy", () => {
+    const { status } = classify(recentGit, agent, null,
+      { staleDays: 3, driftThreshold: 20 }, null, [], passingSummary);
+    expect(status).toBe("in_progress");
+  });
+
+  it("needs_attention when summary score ≥ 60", () => {
+    const { status } = classify(recentGit, agent, null,
+      { staleDays: 3, driftThreshold: 20 }, null, [], stuckSummary);
+    expect(status).toBe("needs_attention");
+  });
+
+  it("needs_attention when likelyStuckReason is set even if score is low", () => {
+    const { status } = classify(recentGit, agent, null,
+      { staleDays: 3, driftThreshold: 20 }, null, [],
+      { ...passingSummary, needsAttentionScore: 20, likelyStuckReason: "no output for 12m" });
+    expect(status).toBe("needs_attention");
   });
 });
