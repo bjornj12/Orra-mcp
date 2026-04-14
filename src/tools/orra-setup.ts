@@ -48,6 +48,24 @@ export async function handleOrraSetup(projectRoot: string) {
     results.push("Added .orra/ to .gitignore");
   }
 
+  // 4. Scaffold .orra/memory/ skeleton
+  const memoryDir = path.join(orraDir, "memory");
+  await fsp.mkdir(path.join(memoryDir, "daily"), { recursive: true });
+  await fsp.mkdir(path.join(memoryDir, "worktrees"), { recursive: true });
+  await fsp.mkdir(path.join(memoryDir, "retros"), { recursive: true });
+
+  const memoryTemplates = ["index.md", "commitments.md"];
+  for (const file of memoryTemplates) {
+    const dest = path.join(memoryDir, file);
+    if (!fs.existsSync(dest)) {
+      const src = path.join(currentDir, "..", "templates", "memory", file);
+      await fsp.copyFile(src, dest);
+      results.push(`Created .orra/memory/${file}`);
+    } else {
+      results.push(`.orra/memory/${file} already exists — skipped`);
+    }
+  }
+
   return {
     content: [{
       type: "text" as const,
