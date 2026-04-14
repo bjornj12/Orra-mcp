@@ -285,6 +285,41 @@ describe("getOrComputeSummary — scoring", () => {
     expect(summary.likelyStuckReason).toMatch(/no output for \d+m/);
   });
 
+  it("does not report 'stuck on errorPattern' for a failed agent", async () => {
+    // A failed agent with an errorPattern in its log should NOT be labeled
+    // as currently stuck — it's already done. The errorPattern still adds
+    // to the score via scoreSummary, but likelyStuckReason should not be
+    // "stuck on X" for a non-running agent.
+    const logFile = path.join(agentsDir, "agent-1.log");
+    await fs.writeFile(logFile, "Error: ENOENT: no such file");
+
+    const failedAgent: AgentState = { ...fakeAgent, status: "failed" };
+    const summary = await getOrComputeSummary("agent-1", failedAgent, {
+      stateDir: agentsDir,
+      now: () => new Date(),
+    });
+
+    expect(summary.likelyStuckReason).toBeNull();
+    // Score still includes errorPattern (+15) and failed (+40) = 55
+    expect(summary.needsAttentionScore).toBeGreaterThanOrEqual(40);
+  });
+
+  it("still reports 'stuck on errorPattern' for a running agent", async () => {
+    // Sanity: the running case (which is what the rule was designed for)
+    // still works.
+    const logFile = path.join(agentsDir, "agent-1.log");
+    await fs.writeFile(logFile, "Error: ENOENT: no such file");
+
+    const runningAgent: AgentState = { ...fakeAgent, status: "running" };
+    const summary = await getOrComputeSummary("agent-1", runningAgent, {
+      stateDir: agentsDir,
+      // Use updatedAt as now so the no-output-timeout branch doesn't fire instead.
+      now: () => new Date(fakeAgent.updatedAt),
+    });
+
+    expect(summary.likelyStuckReason).toBe("stuck on ENOENT");
+  });
+
   it("clamps score to 0–100", async () => {
     // Pile up everything
     const logFile = path.join(agentsDir, "agent-1.log");

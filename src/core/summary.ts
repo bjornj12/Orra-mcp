@@ -81,7 +81,13 @@ function deriveStuckReason(
 ): string | null {
   if (agent.pendingQuestion) return `awaiting permission: ${agent.pendingQuestion.tool}`;
   if (signals.loopDetected) return "loop: same line repeats in tail";
-  if (signals.errorPattern) return `stuck on ${signals.errorPattern}`;
+  // "Stuck on X" only makes sense for an agent that's still trying. A failed,
+  // interrupted, or completed agent isn't stuck — it's done. The error pattern
+  // still contributes to needsAttentionScore via scoreSummary; we just don't
+  // label the agent as currently blocked by it.
+  if (signals.errorPattern && agent.status === "running") {
+    return `stuck on ${signals.errorPattern}`;
+  }
   if (agent.status === "running") {
     const updated = new Date(agent.updatedAt).getTime();
     const idleMs = now.getTime() - updated;
