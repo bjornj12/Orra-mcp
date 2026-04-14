@@ -23,10 +23,8 @@ describe("parseLog — empty input", () => {
   it("returns an empty-signals shape on empty string", () => {
     const result = parseLog("");
     expect(result).toEqual({
-      lastActivityAt: null,
       lastFileEdited: null,
       lastTestResult: "unknown",
-      testFailureSnippet: null,
       errorPattern: null,
       loopDetected: false,
       tailLines: [],
@@ -81,6 +79,14 @@ describe("parseLog — lastTestResult", () => {
 
   it("returns 'unknown' when no test signals present", () => {
     expect(parseLog("building...\ndone").lastTestResult).toBe("unknown");
+  });
+
+  it("returns 'pass' for Jest summary with 0 failed", () => {
+    expect(parseLog("Tests:       3 passed, 0 failed, 3 total").lastTestResult).toBe("pass");
+  });
+
+  it("returns 'pass' for mocha summary with 0 failing", () => {
+    expect(parseLog("  5 passing (120ms)\n  0 failing").lastTestResult).toBe("pass");
   });
 });
 

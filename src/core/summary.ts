@@ -133,10 +133,8 @@ async function computeFresh(
   const signals: LogSignals = tail
     ? parseLog(tail.text)
     : {
-        lastActivityAt: null,
         lastFileEdited: null,
         lastTestResult: "unknown",
-        testFailureSnippet: null,
         errorPattern: null,
         loopDetected: false,
         tailLines: [],

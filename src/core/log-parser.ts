@@ -1,8 +1,6 @@
 export interface LogSignals {
-  lastActivityAt: string | null;
   lastFileEdited: string | null;
   lastTestResult: "pass" | "fail" | "unknown";
-  testFailureSnippet: string | null;
   errorPattern: string | null;
   loopDetected: boolean;
   tailLines: string[];
@@ -17,9 +15,9 @@ export function stripAnsi(text: string): string {
 }
 
 const TEST_PATTERNS: Array<{ regex: RegExp; verdict: "pass" | "fail" }> = [
-  { regex: /\btests?:.*\d+\s+failed/i, verdict: "fail" },
+  { regex: /\btests?:.*?\b[1-9]\d*\s+failed/i, verdict: "fail" },
   { regex: /\btests?:.*\d+\s+passed/i, verdict: "pass" },
-  { regex: /\b\d+\s+failing\b/i, verdict: "fail" },
+  { regex: /\b[1-9]\d*\s+failing\b/i, verdict: "fail" },
   { regex: /\b\d+\s+passing\b/i, verdict: "pass" },
   { regex: /\bFAIL\b/, verdict: "fail" },
   { regex: /\bPASS\b/, verdict: "pass" },
@@ -88,10 +86,8 @@ export function parseLog(logText: string): LogSignals {
   const tail20 = nonBlank.slice(-20);
 
   return {
-    lastActivityAt: null,
     lastFileEdited: detectLastFileEdited(recent50),
     lastTestResult: detectTestResult(recent50),
-    testFailureSnippet: null,
     errorPattern: detectErrorPattern(recent50),
     loopDetected: detectLoop(tail20),
     tailLines: tail20,
