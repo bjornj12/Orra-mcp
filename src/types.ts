@@ -29,6 +29,7 @@ export const ConfigSchema = z.object({
   defaultAgent: z.string().nullable().default(null),
   providers: z.array(ProviderConfigSchema).default([]),
   providerCache: ProviderCacheConfigSchema.default({ ttl: 5000 }),
+  headlessSpawnConcurrency: z.number().int().min(0).default(3),
 });
 export type Config = z.infer<typeof ConfigSchema>;
 
