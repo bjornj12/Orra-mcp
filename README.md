@@ -253,6 +253,44 @@ that a separate vault you opt into explicitly.
 Non-Obsidian users: the same files work with Logseq, Foam, or plain
 `grep` / `rg` / Claude-reading-files. Nothing is Obsidian-specific.
 
+## Headless Agent Spawning
+
+Orra can spawn `claude --print` (headless mode) agents in worktrees to
+handle routine maintenance work — rebases, lint fixes, snapshot updates —
+while you focus on the work that actually needs your attention.
+
+```
+.orra/agents/<id>.json   — agent state (status, persona: "headless-spawn", pid)
+.orra/agents/<id>.log    — captured stdout/stderr
+```
+
+**Spawn manually:**
+
+```
+orra_spawn({
+  task: "Rebase this worktree onto main and run the tests",
+  reason: "12 commits behind",
+  worktree: "feat-payments"   // optional; new worktree created if omitted
+})
+```
+
+**Or enable the `auto-remediator` directive** to have Orra spot remediation
+candidates from `orra_scan` and spawn agents automatically — within a
+locked-down tool allowlist (`Read`, `Glob`, `Grep`, `Edit`, `Write`, common
+safe `git`/`npm` operations) and a configurable concurrency limit
+(`.orra/config.json` → `headlessSpawnConcurrency`, default 3).
+
+**Safety defaults:**
+
+- Spawned agents cannot run `rm`, `kill`, `sudo`, `curl`, `wget`, package
+  installs, or any destructive operation. The full allowlist lives in
+  `src/core/spawn-defaults.ts`.
+- Tasks outside the `auto-remediator` directive's allowlist are *proposed*
+  to you, never auto-executed.
+- The concurrency limit caps how many headless agents run at once.
+- Spawned processes are detached — they survive MCP server restarts. The
+  exit code is captured and reflected in the agent's state on next scan.
+
 ## Tools Reference
 
 ### Orchestrator Mode
