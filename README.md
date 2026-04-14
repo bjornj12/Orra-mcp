@@ -1,27 +1,40 @@
 # Orra MCP
 
-Run multiple Claude Code agents in parallel. Monitor all of them from one terminal.
+> An assistant orchestrator for Claude Code that tracks your worktrees,
+> learns with you, and handles routine maintenance in the background.
 
-### The problem
-
-You have 3 agents working in 3 worktrees. One is waiting for permission. One finished 10 minutes ago. One is asking you a question. You don't know any of this because you're alt-tabbing between terminals, losing track of who needs what.
-
-### The fix
+---
 
 ```
-You (one terminal): "what's happening?"
+You: (just open Claude Code)
 
-  auth-agent      ⏳ waiting  "Allow Bash: npm install?"
-  billing-agent   ✅ done     Finished — reviewer auto-spawned
-  test-agent      💬 idle     "Which approach? A) mock B) real DB C) both"
+Orra: Morning. Yesterday's first move was: pick back up on JWT refresh.
+      Today's situation:
+      • Due today: AUTH-142 (in_progress, worktree auth-refactor)
+      • Ready to land: billing-fix — PR approved, mergeable
+      • Needs attention: onboarding — waiting on a permission prompt
+      Recommended first action: unblock onboarding (30s), then JWT.
+      What's your plan for today?
 
-You: "message auth-agent: yes"
-You: "message test-agent: C"
+You: focus is JWT, ship by 4pm.
+
+Orra: Got it. I'll align suggestions to that. Spawning a background
+      agent to rebase the 2 stale worktrees while you work — they'll
+      be ready when you come back to them.
 ```
 
-One terminal. Full visibility. You only engage when someone needs you.
+Orra is an assistant orchestrator: it learns your day, keeps you focused,
+and quietly takes care of the background.
 
-## Quick Start
+## What it is
+
+Orra is an MCP server that gives Claude Code three capabilities it doesn't have on its own:
+
+- **Awareness** — scans every worktree and ticket you're touching, classifies status (`ready_to_land`, `needs_attention`, `in_progress`, `idle`, `stale`), and pre-computes per-agent summaries so you don't have to re-parse logs.
+- **Learning** — a markdown memory layer under `.orra/memory/`. Daily notes, commitments, per-worktree notes, and weekly retros persist across sessions. Directives like `morning-briefing` and `shutdown-ritual` maintain it for you.
+- **Side tasks** — `orra_spawn` launches detached `claude --print` agents in worktrees to handle routine maintenance (rebases, lint fixes, snapshot updates) while you focus on the work that actually needs you.
+
+## Quick start
 
 ### 1. Install
 
@@ -30,311 +43,113 @@ npm install -g orra-mcp
 claude mcp add orra -- orra-mcp
 ```
 
-Or without global install:
+Or without a global install: `claude mcp add orra -- npx orra-mcp`
 
-```bash
-claude mcp add orra -- npx orra-mcp
-```
-
-### 2. Add instructions to your project
-
-Copy the Orra instructions into your project's CLAUDE.md (or append to an existing one):
+### 2. Add orchestrator instructions to your project CLAUDE.md
 
 ```bash
 curl -sL https://raw.githubusercontent.com/bjornj12/Orra-mcp/main/CLAUDE.template.md >> your-project/CLAUDE.md
 ```
 
-This tells Claude to use `orra` for agent management instead of doing work directly. Without this, Claude may cd into worktrees and do the work itself instead of delegating.
+This tells Claude to use Orra for worktree management instead of doing the work directly.
 
-### 3. Restart Claude Code
+### 3. Restart Claude Code, then scaffold the project
 
-Start a new Claude Code session. Orra detects it's the first terminal and runs in **orchestrator mode** with all management tools.
-
-### 4. Run setup once per project
-
-In your fresh session, ask Claude to run setup:
+In your fresh session, run:
 
 > "run orra_setup"
 
-This scaffolds `.orra/` with a default config, copies the orchestrator persona to `.claude/agents/orchestrator.md`, and creates the `.orra/memory/` skeleton (daily notes, per-worktree notes, commitments file). Idempotent — safe to re-run anytime.
+This creates `.orra/config.json`, installs the orchestrator persona into `.claude/agents/`, adds `.orra/` to `.gitignore`, and scaffolds the memory layer. Idempotent — safe to re-run.
 
-### 5. Install the recommended directive set
+### 4. Install the directive pack
 
-Still in the same session, say:
+> "install all orra directives"
 
-> "Install all orra directives"
+Copies the full directive library (10 directives) into `.orra/directives/`. Each declares its own "lane" so they compose without conflict. Restart your session to load them.
 
-This invokes `orra_directive` with `action: "install-all"` and copies the entire shipped directive library into `.orra/directives/`. Every directive is designed to coexist — each declares its own "lane" (session-start surfacing, ongoing PR state, event-driven reactions, autonomous remediation, memory writes, memory recall) so they compose without conflict.
+## A day with Orra
 
-You get all 10 directives at once: `morning-briefing`, `shutdown-ritual`, `memory-recall`, `linear-tasks`, `linear-deadline-tracker`, `pr-shepherd`, `stale-cleanup`, `monitor-agents`, `auto-remediator`, `wait-time-recycler`.
+### Morning — awareness
 
-You can install them individually instead if you want a subset (`"install the morning-briefing directive"`), but the default recommended setup is the full set.
+The briefing you just saw is the `morning-briefing` directive firing automatically on session start. It calls `orra_scan` (which pulls git state, PR state, agent state, and any state providers you've configured), reads yesterday's daily note, checks `commitments.md`, and composes the picture. Per-agent summaries are pre-computed so directives don't re-parse logs every time.
 
-### 6. Use it
-
-Restart your session one more time so the orchestrator persona loads with all directives active. Then your day starts like this:
+### Picking focus — partnership
 
 ```
-You: (just open Claude Code)
+You: focus is JWT refresh, ship by 4pm.
 
-Orchestrator (morning-briefing fires automatically):
-  Morning. Yesterday's first move was: pick back up on the JWT refresh.
-  Today's situation:
-  • Due today: AUTH-142 (in_progress, worktree auth-refactor)
-  • Ready to land: billing-fix — PR approved, mergeable
-  • Needs attention: onboarding — agent waiting on permission
-  Recommended first action: unblock onboarding (30s), then JWT.
-  What's your plan for today?
-
-You: focus is JWT refresh, ship by 4pm
-
-Orchestrator: Got it. I'll align suggestions to that.
-  Spawned auto-remediator agent to rebase 2 stale branches in
-  the background — they'll be ready when you need them.
+Orra: Got it. I'll align suggestions to that. If anything else starts
+      clamoring for attention I'll tell you, but I won't derail you.
 ```
 
-For routine maintenance work the user shouldn't have to think about (rebases, lint fixes, snapshot updates), the `auto-remediator` directive spawns headless background agents via `orra_spawn`. You only see the results.
+Orra writes your focus into today's daily note. Other directives (`pr-shepherd`, `wait-time-recycler`, `stale-cleanup`) defer to it — they won't interrupt you unless something genuinely blocks your focus.
 
-## How It Works
+### Side tasks — delegation
 
-### Two Ways to Create Agents
+While you work on JWT, `auto-remediator` notices two worktrees are 12+ commits behind main and spawns headless agents to rebase them. Both run detached via `orra_spawn` with a locked-down tool allowlist (no `rm`, no network beyond `git`, no package installs). Results show up in the next `orra_scan`. You never had to stop working.
 
-**Spawn from the orchestrator (automated):**
-
-Orra creates a worktree, launches `claude`, and manages the full lifecycle. You monitor and interact from your terminal.
+### End of day — memory
 
 ```
-You: "spawn an agent to refactor auth"
-→ git worktree add worktrees/refactor-auth-a1b2 -b orra/refactor-auth-a1b2
-→ claude starts working in the worktree
-→ Agent shows up in orra_list
+You: done for the day.
+
+Orra: Wrapping up. Writing today's daily note:
+      - Shipped: JWT refresh merged, onboarding permission resolved
+      - Still open: AUTH-142 review feedback (parked)
+      - Tomorrow's first move: address AUTH-142 feedback
+      See you tomorrow.
 ```
 
-**Register an existing terminal (manual):**
+The `shutdown-ritual` directive writes `.orra/memory/daily/<today>.md` with the shipped/open/first-move sections. Tomorrow's `morning-briefing` will read this and start you off exactly where you left off.
 
-Already have a Claude Code session running? Register it with the orchestrator. Open another terminal:
+## Writing your own directive
 
-```
-Terminal B: "register with Orra, I'm working on the billing fix"
-→ orra_register connects to the orchestrator via Unix socket
-→ Terminal B is now a tracked agent
-→ Shows up in orra_list alongside spawned agents
-```
+Directives are plain markdown files in `.orra/directives/` that the orchestrator reads at session start and follows as standing instructions.
 
-### Dual-Mode Server
+**The format:**
 
-The same `orra-mcp` package runs in two modes, auto-detected on startup:
+```markdown
+## Directive Title
 
-| Mode | When | Tools |
-|------|------|-------|
-| **Orchestrator** | First terminal (no existing socket) | `orra_spawn`, `orra_list`, `orra_status`, `orra_output`, `orra_stop`, `orra_message`, `orra_link`, `orra_install_hooks` |
-| **Agent** | Socket exists (orchestrator running) | `orra_register`, `orra_unregister`, `orra_heartbeat`, `orra_install_hooks` |
+Describe when this fires and what to do, in free-form prose.
 
-### Automatic Input Detection
+### On Session Start
+(what to check, what to present)
 
-When agents need input — permission prompts, clarifying questions, or presenting options — Orra detects it automatically via Claude Code hooks:
+### During the Session
+(event-driven reactions)
 
-```
-orra_list shows:
+### My Lane
+(which concerns you own, so you compose cleanly with other directives)
 
-  auth-agent     ⏳ waiting  "Allow Bash: npm install?"
-  billing-agent  💬 idle     "Which approach? A) retry B) queue C) skip"
-  test-agent     🔄 running  Writing integration tests...
-
-You: "message auth-agent: yes"        → approves the permission
-You: "message billing-agent: B"       → answers the question
+### Dependencies
+- orra_scan (or whatever tools/files you rely on)
 ```
 
-**Setup hooks** (one-time per project):
+No YAML frontmatter, no template engine — just markdown prose that Claude reads and follows.
 
-```
-You: "install Orra hooks"  → orra_install_hooks
-```
+**Two ways to create one:**
 
-This writes to `.claude/settings.local.json` (gitignored, per-user) so it doesn't affect other developers.
+- **Live** — say *"add a directive called ci-guard that flags failing tests at session start"*. Orra calls `orra_directive` with `action: "add"`, writes the file, and applies the instruction to the current session immediately.
+- **Manually** — create `.orra/directives/<name>.md` in your editor and restart the session.
 
-### Agent Chaining
+**Fastest starting point:** copy a shipped directive and edit it. *"install the pr-shepherd directive"* puts `.orra/directives/pr-shepherd.md` on disk — open it, strip what you don't need, rename it. The shipped directives demonstrate every pattern.
 
-Chain agents with template variables:
+Full authoring guide + explanation of the "lane" concept: **[docs/directives.md](docs/directives.md)**.
 
-```
-orra_link({
-  from: "auth-agent",
-  to: { task: "Review the changes on branch {{from.branch}}" },
-  on: "success"
-})
-```
+## Tools
 
-Available variables: `{{from.branch}}`, `{{from.worktree}}`, `{{from.task}}`, `{{from.status}}`
-
-Trigger conditions: `"success"` (exit 0), `"failure"` (exit non-zero), `"any"`
-
-### Custom Spawn Commands
-
-If your team has custom worktree setup (copying files, configuring environments, sandbox scripts), configure a custom spawn command:
-
-```json
-// .orra/config.json
-{
-  "spawnCommand": "yarn sandbox {{branch}}",
-  "defaultModel": null,
-  "defaultAllowedTools": null
-}
-```
-
-When `orra_spawn` runs, it executes your command instead of the default `git worktree add` + `claude`. Your script handles everything — worktree creation, env setup, starting claude. Orra wraps it in a PTY and monitors the output.
-
-Template variables: `{{branch}}`, `{{task}}`, `{{agentId}}`
-
-## Real-World Example: Multi-Agent Pipeline
-
-Run multiple agent teams across different features, all monitored from one terminal:
-
-```
-You (Terminal A — orchestrator):
-
-┌────────────────────────┬──────────┬────────────────────────────────────┐
-│ payments-pipeline       │ 💬 idle  │ Lisa: "What should happen when     │
-│                         │          │  payment fails mid-checkout?"      │
-├────────────────────────┼──────────┼────────────────────────────────────┤
-│ auth-refactor           │ 🔄 run  │ Milhouse: implementing JWT...      │
-├────────────────────────┼──────────┼────────────────────────────────────┤
-│ onboarding-flow         │ ⏳ wait  │ "Allow Bash: npm run migrate?"     │
-├────────────────────────┼──────────┼────────────────────────────────────┤
-│ api-v2                  │ ✅ done  │ Maggie: PR #312 approved           │
-└────────────────────────┴──────────┴────────────────────────────────────┘
-
-You: "message payments-pipeline: fail the order, refund, email the user"
-You: "message onboarding-flow: yes"
-```
-
-Four workstreams, one terminal, you only engage when someone needs you.
-
-## State
-
-All state lives on the filesystem in `.orra/` — no database, no external services:
-
-```
-.orra/
-├── orra.sock               — Unix socket (live while orchestrator runs)
-├── config.json             — project settings + custom spawn command
-├── agents/
-│   ├── <id>.json           — agent metadata (task, branch, pid, status, type)
-│   └── <id>.log            — captured output
-└── links.json              — coordination rules
-```
-
-**Agent statuses:** `running`, `idle` (finished a turn), `waiting` (blocked on permission), `completed`, `failed`, `interrupted`, `killed`
-
-**Persistence model:** Agent processes are ephemeral (die with the MCP server), but state files persist. On restart, `orra_list` shows the full history — you can re-spawn incomplete work.
-
-## Memory Layer
-
-Orra's directive pack writes to a markdown-based memory layer at
-`.orra/memory/` — dated journals, per-worktree notes, commitment
-tracking, and an index. Directives like `morning-briefing` and
-`shutdown-ritual` maintain it automatically when enabled.
-
-```
-.orra/memory/
-├── index.md              — landing note, auto-updated
-├── daily/                — one file per day, written by shutdown-ritual
-│   └── 2026-04-13.md
-├── worktrees/            — per-worktree notes, survive worktree deletion
-│   └── auth-refactor.md
-├── retros/               — weekly rollups (when Personal Retro is enabled)
-└── commitments.md        — Linear deadlines + ad-hoc promises
-```
-
-### Using Obsidian (or any markdown vault tool)
-
-Memory files use YAML frontmatter, `[[wikilinks]]`, and ISO date
-filenames so Obsidian, Logseq, Foam, or plain `grep` all read them
-the same way. No plugin required.
-
-**Setup with Obsidian:**
-
-1. In Obsidian, "Open folder as vault" → select `.orra/memory/`
-2. Settings → Core plugins → Daily notes → folder: `daily`, format: `YYYY-MM-DD`
-3. Settings → Files and Links → New link format: `Shortest path when possible`
-
-You now get backlinks, graph view, search, and daily notes for free.
-
-**⚠️ Secrets warning**
-
-Your daily notes will contain session context — task descriptions,
-decisions, sometimes code snippets. Before enabling Obsidian Sync,
-iCloud, Dropbox, or any cloud sync on this vault, make sure you're
-comfortable with that content leaving your machine.
-
-Recommended: use a **local-only** vault for `.orra/memory/`. If you
-want some of your memory synced (e.g. a "public" retros folder), make
-that a separate vault you opt into explicitly.
-
-Non-Obsidian users: the same files work with Logseq, Foam, or plain
-`grep` / `rg` / Claude-reading-files. Nothing is Obsidian-specific.
-
-## Headless Agent Spawning
-
-Orra can spawn `claude --print` (headless mode) agents in worktrees to
-handle routine maintenance work — rebases, lint fixes, snapshot updates —
-while you focus on the work that actually needs your attention.
-
-```
-.orra/agents/<id>.json   — agent state (status, persona: "headless-spawn", pid)
-.orra/agents/<id>.log    — captured stdout/stderr
-```
-
-**Spawn manually:**
-
-```
-orra_spawn({
-  task: "Rebase this worktree onto main and run the tests",
-  reason: "12 commits behind",
-  worktree: "feat-payments"   // optional; new worktree created if omitted
-})
-```
-
-**Or enable the `auto-remediator` directive** to have Orra spot remediation
-candidates from `orra_scan` and spawn agents automatically — within a
-locked-down tool allowlist (`Read`, `Glob`, `Grep`, `Edit`, `Write`, common
-safe `git`/`npm` operations) and a configurable concurrency limit
-(`.orra/config.json` → `headlessSpawnConcurrency`, default 3).
-
-**Safety defaults:**
-
-- Spawned agents cannot run `rm`, `kill`, `sudo`, `curl`, `wget`, package
-  installs, or any destructive operation. The full allowlist lives in
-  `src/core/spawn-defaults.ts`.
-- Tasks outside the `auto-remediator` directive's allowlist are *proposed*
-  to you, never auto-executed.
-- The concurrency limit caps how many headless agents run at once.
-- Spawned processes are detached — they survive MCP server restarts. The
-  exit code is captured and reflected in the agent's state on next scan.
-
-## Tools Reference
-
-### Orchestrator Mode
-
-| Tool | Input | Description |
-|------|-------|-------------|
-| `orra_spawn` | `task`, `branch?`, `model?`, `allowedTools?` | Create a worktree and start a Claude agent |
-| `orra_list` | — | List all agents with status, preview, pending questions |
-| `orra_status` | `agentId` | Get detailed state + recent output for one agent |
-| `orra_output` | `agentId`, `tail?` | Get full or last N lines of agent output |
-| `orra_stop` | `agentId`, `cleanup?` | Stop agent, optionally remove worktree + branch |
-| `orra_message` | `agentId`, `message` | Send input to agent (also answers permission prompts) |
-| `orra_link` | `from`, `to`, `on` | Auto-spawn an agent when another completes |
-| `orra_install_hooks` | — | Install input detection hooks in this project |
-
-### Agent Mode
-
-| Tool | Input | Description |
-|------|-------|-------------|
-| `orra_register` | `task`, `branch?` | Register this terminal as an agent |
-| `orra_unregister` | `status?` | Unregister and report completion |
-| `orra_heartbeat` | `activity` | Send a status update to the orchestrator |
-| `orra_install_hooks` | — | Install input detection hooks in this project |
+| Tool | Purpose |
+|---|---|
+| `orra_scan` | Scan every tracked worktree. Returns status, git/PR/agent state, and pre-computed summaries. Start here. |
+| `orra_inspect` | Deep dive on one worktree — commit log, marker contents, conflict prediction, agent output tail. |
+| `orra_register` | Start tracking an existing worktree (installs Claude Code hooks). |
+| `orra_unblock` | Answer a pending permission prompt for a tracked agent. |
+| `orra_kill` | Stop a tracked agent and optionally remove the worktree + branch. |
+| `orra_rebase` | Rebase a worktree branch onto latest main. |
+| `orra_setup` | Scaffold `.orra/` + install orchestrator persona. Run once per project. |
+| `orra_directive` | Manage directives (add, list, remove, install shipped ones). |
+| `orra_spawn` | Spawn a detached headless agent for routine maintenance. |
 
 ## Requirements
 
@@ -352,61 +167,15 @@ npm run build
 npm test
 ```
 
-### Project Structure
+See **[CONTRIBUTING.md](CONTRIBUTING.md)** for contribution guidelines.
 
-```
-src/
-├── index.ts                — Entry point, mode detection, stdio transport
-├── server.ts               — MCP server, conditional tool registration
-├── types.ts                — Zod schemas, TypeScript types, socket protocol
-├── bin/
-│   └── orra-hook.ts        — Hook script for PermissionRequest + Stop events
-├── core/
-│   ├── agent-manager.ts    — Central orchestrator (spawn, stop, message, link)
-│   ├── socket-server.ts    — Unix domain socket server (orchestrator side)
-│   ├── socket-client.ts    — Unix domain socket client (agent side)
-│   ├── worktree.ts         — Git worktree create/remove
-│   ├── process.ts          — node-pty wrapper for PTY lifecycle
-│   ├── stream-parser.ts    — ANSI stripping, output collection
-│   ├── state.ts            — .orra/ filesystem state persistence
-│   └── linker.ts           — Agent chaining, template expansion
-└── tools/                  — One file per MCP tool handler
-```
+## Further reading
 
-### Running Tests
-
-```bash
-npm test              # run all tests
-npm run test:watch    # watch mode
-```
-
-132 tests across 13 test files covering unit tests (types, state, worktree, process, stream parser, linker, socket server/client, hook script) and integration tests (agent lifecycle, linking, external agents, hooks).
-
-## Roadmap
-
-### v1 (Current)
-
-- Spawn and manage agents in git worktrees
-- Register existing terminals as agents
-- Automatic input detection via hooks
-- Agent chaining with template variables
-- Custom spawn commands for team workflows
-
-### v2 — Pipeline Templates
-
-Define reusable multi-stage workflows (`spec -> implement -> review -> merge`) as templates. Run a task through a pipeline and Orra handles stage transitions, review gates, and escalation.
-
-### v3 — Agent-to-Agent Communication
-
-Agents get their own MCP tools (`report_status`, `get_sibling_status`) to coordinate directly without routing through the orchestrator.
-
-### v4 — CLI Companion
-
-`orra` CLI for non-MCP usage. Spawn and manage agents from any terminal without Claude Code.
-
-### v5 — Distributed Agents
-
-Agents on remote machines. SSH-based worktree creation, remote PTY management, cross-machine coordination.
+- [docs/directives.md](docs/directives.md) — writing and composing directives
+- [docs/memory-layer.md](docs/memory-layer.md) — daily notes, commitments, Obsidian setup
+- [docs/headless-spawning.md](docs/headless-spawning.md) — `orra_spawn` safety + auto-remediator
+- [docs/state-providers.md](docs/state-providers.md) — integrating a dashboard
+- [docs/architecture.md](docs/architecture.md) — source layout and filesystem state
 
 ## License
 
