@@ -8,6 +8,7 @@ import { orraRebaseSchema, handleOrraRebase } from "./tools/orra-rebase.js";
 import { orraRegisterSchema, handleOrraRegister } from "./tools/orra-register.js";
 import { orraSetupSchema, handleOrraSetup } from "./tools/orra-setup.js";
 import { orraDirectiveSchema, handleOrraDirective } from "./tools/orra-directive.js";
+import { orraSpawnSchema, handleOrraSpawn } from "./tools/orra-spawn.js";
 
 export function createServer(projectRoot: string): { server: McpServer; manager: AgentManager } {
   const server = new McpServer({ name: "orra-mcp", version: "0.3.0" });
@@ -21,6 +22,7 @@ export function createServer(projectRoot: string): { server: McpServer; manager:
   server.tool("orra_rebase", "Rebase a worktree branch on latest main.", orraRebaseSchema.shape, async (args) => handleOrraRebase(manager, projectRoot, orraRebaseSchema.parse(args)));
   server.tool("orra_setup", "Initialize Orra in this project — creates .orra/config.json, installs orchestrator agent persona to .claude/agents/, adds .orra/ to .gitignore.", orraSetupSchema.shape, async () => handleOrraSetup(projectRoot));
   server.tool("orra_directive", "Add, list, or remove orchestrator directives. Directives extend what the orchestrator does on session start (e.g., check Linear tasks, monitor deploys). Stored in .orra/directives/.", orraDirectiveSchema.shape, async (args) => handleOrraDirective(projectRoot, orraDirectiveSchema.parse(args)));
+  server.tool("orra_spawn", "Spawn a headless `claude --print` agent in a worktree (existing or new) with locked-down tool permissions. Use for routine maintenance work the user shouldn't have to touch (rebases, lint fixes, snapshot updates). Returns the spawned agent's id, pid, worktree path, and log path. Subject to .orra/config.json's headlessSpawnConcurrency limit (default 3).", orraSpawnSchema.shape, async (args) => handleOrraSpawn(manager, orraSpawnSchema.parse(args)));
 
   return { server, manager };
 }
