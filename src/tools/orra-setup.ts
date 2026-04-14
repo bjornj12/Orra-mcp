@@ -24,6 +24,7 @@ export async function handleOrraSetup(projectRoot: string) {
       driftThreshold: 20,
       defaultModel: null,
       defaultAgent: null,
+      headlessSpawnConcurrency: 3,
     }, null, 2));
     results.push("Created .orra/config.json");
   } else {

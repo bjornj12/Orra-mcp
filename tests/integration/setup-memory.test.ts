@@ -52,4 +52,12 @@ describe("handleOrraSetup — memory scaffold", () => {
     const content = await fs.readFile(path.join(tmpDir, ".orra", "memory", "index.md"), "utf-8");
     expect(content).toContain("This file is managed by Orra directives");
   });
+
+  it("writes headlessSpawnConcurrency: 3 to the new config", async () => {
+    await handleOrraSetup(tmpDir);
+    const configPath = path.join(tmpDir, ".orra", "config.json");
+    const raw = await fs.readFile(configPath, "utf-8");
+    const config = JSON.parse(raw);
+    expect(config.headlessSpawnConcurrency).toBe(3);
+  });
 });
