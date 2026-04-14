@@ -82,8 +82,9 @@ Don't act unless the user agrees — these are diagnoses, not auto-fixes.
 
 1. Read `summary.oneLine` and `summary.tailLines` for the immediate context.
 2. Note: `likelyStuckReason` will be **null** for failed/interrupted agents — that's by design (they're done, not currently stuck). Use `summary.tailLines` and `summary.lastTestResult` instead to diagnose.
-3. If interrupted (lost connection, killed PID), attempt a single restart with the same task. If it interrupts again, stop retrying and surface to the user with your diagnosis from the tail.
-4. If failed (non-zero exit), surface immediately with diagnosis — don't restart.
+3. **Check `agent.agentPersona`.** If it's `"headless-spawn"` (an `auto-remediator`-spawned agent), do NOT attempt restart. A failed headless agent usually means the task hit something the safe `--allowed-tools` allowlist couldn't handle — restarting won't fix that. Surface it to the user with the diagnosis and the reason it was spawned, so they can decide whether to widen the allowlist, take it manually, or ignore it. The `auto-remediator` directive should also be aware via the next scan and stop re-spawning the same pattern.
+4. If it's an interactive/registered agent (not headless-spawn): attempt a single restart with the same task. If it interrupts again, stop retrying and surface to the user with your diagnosis from the tail.
+5. If failed (non-zero exit) on an interactive agent, surface immediately with diagnosis — don't restart.
 
 #### High Attention Score (`summary.needsAttentionScore >= 60`)
 

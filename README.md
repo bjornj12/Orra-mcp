@@ -50,29 +50,50 @@ This tells Claude to use `orra` for agent management instead of doing work direc
 
 Start a new Claude Code session. Orra detects it's the first terminal and runs in **orchestrator mode** with all management tools.
 
-### 4. Spawn your first agent
+### 4. Run setup once per project
+
+In your fresh session, ask Claude to run setup:
+
+> "run orra_setup"
+
+This scaffolds `.orra/` with a default config, copies the orchestrator persona to `.claude/agents/orchestrator.md`, and creates the `.orra/memory/` skeleton (daily notes, per-worktree notes, commitments file). Idempotent — safe to re-run anytime.
+
+### 5. Install the recommended directive set
+
+Still in the same session, say:
+
+> "Install all orra directives"
+
+This invokes `orra_directive` with `action: "install-all"` and copies the entire shipped directive library into `.orra/directives/`. Every directive is designed to coexist — each declares its own "lane" (session-start surfacing, ongoing PR state, event-driven reactions, autonomous remediation, memory writes, memory recall) so they compose without conflict.
+
+You get all 10 directives at once: `morning-briefing`, `shutdown-ritual`, `memory-recall`, `linear-tasks`, `linear-deadline-tracker`, `pr-shepherd`, `stale-cleanup`, `monitor-agents`, `auto-remediator`, `wait-time-recycler`.
+
+You can install them individually instead if you want a subset (`"install the morning-briefing directive"`), but the default recommended setup is the full set.
+
+### 6. Use it
+
+Restart your session one more time so the orchestrator persona loads with all directives active. Then your day starts like this:
 
 ```
-You: "spawn an agent to add input validation to the API"
+You: (just open Claude Code)
+
+Orchestrator (morning-briefing fires automatically):
+  Morning. Yesterday's first move was: pick back up on the JWT refresh.
+  Today's situation:
+  • Due today: AUTH-142 (in_progress, worktree auth-refactor)
+  • Ready to land: billing-fix — PR approved, mergeable
+  • Needs attention: onboarding — agent waiting on permission
+  Recommended first action: unblock onboarding (30s), then JWT.
+  What's your plan for today?
+
+You: focus is JWT refresh, ship by 4pm
+
+Orchestrator: Got it. I'll align suggestions to that.
+  Spawned auto-remediator agent to rebase 2 stale branches in
+  the background — they'll be ready when you need them.
 ```
 
-Orra creates a git worktree, launches a Claude Code session in it, and the agent starts working on its own branch. You stay in your terminal, orchestrating.
-
-### 5. Monitor and interact
-
-```
-You: "what agents are running?"        → orra_list
-You: "how's the validation agent?"     → orra_status
-You: "tell it to also check email format" → orra_message
-```
-
-### 6. Chain agents
-
-```
-You: "when the validation agent finishes, spawn a reviewer"
-```
-
-The reviewer auto-spawns when validation completes, with full context about the branch and task.
+For routine maintenance work the user shouldn't have to think about (rebases, lint fixes, snapshot updates), the `auto-remediator` directive spawns headless background agents via `orra_spawn`. You only see the results.
 
 ## How It Works
 

@@ -8,8 +8,8 @@ const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const examplesDir = path.join(currentDir, "..", "templates", "directives");
 
 export const orraDirectiveSchema = z.object({
-  action: z.enum(["add", "list", "remove", "examples", "install"]).describe(
-    "add: create a new directive, list: show active directives, remove: delete a directive, examples: show available example directives, install: install an example directive by name"
+  action: z.enum(["add", "list", "remove", "examples", "install", "install-all"]).describe(
+    "add: create a new directive, list: show active directives, remove: delete a directive, examples: show available example directives, install: install an example directive by name, install-all: install every example directive at once (recommended default for a coherent set)"
   ),
   name: z.string().optional().describe("Directive name (for add/remove/install). Alphanumeric + hyphens."),
   content: z.string().optional().describe("Markdown content for the directive (for add). Describe what the orchestrator should do."),
@@ -112,6 +112,40 @@ export async function handleOrraDirective(
         name: sanitizeName(args.name),
         directive: content,
         instruction: "IMPORTANT: Follow this directive immediately in the current session. It has also been saved to disk so future sessions will load it automatically.",
+      });
+    }
+
+    case "install-all": {
+      let exampleFiles: string[];
+      try {
+        exampleFiles = (await fsp.readdir(examplesDir)).filter(f => f.endsWith(".md"));
+      } catch {
+        return error("Could not read examples directory");
+      }
+
+      if (exampleFiles.length === 0) {
+        return ok({ installedAll: true, count: 0, installed: [], skipped: [] });
+      }
+
+      const installed: string[] = [];
+      const skipped: string[] = [];
+      for (const file of exampleFiles) {
+        const destFile = path.join(dirPath, file);
+        if (fs.existsSync(destFile)) {
+          skipped.push(file.replace(".md", ""));
+          continue;
+        }
+        const content = await fsp.readFile(path.join(examplesDir, file), "utf-8");
+        await fsp.writeFile(destFile, content);
+        installed.push(file.replace(".md", ""));
+      }
+
+      return ok({
+        installedAll: true,
+        count: installed.length,
+        installed,
+        skipped,
+        instruction: "IMPORTANT: All directives installed. Read each file in .orra/directives/ and follow them immediately in the current session. They are designed to coexist — each declares its own 'lane' so they compose without conflict. Existing directives were skipped to preserve user customizations.",
       });
     }
   }
