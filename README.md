@@ -207,6 +207,52 @@ All state lives on the filesystem in `.orra/` — no database, no external servi
 
 **Persistence model:** Agent processes are ephemeral (die with the MCP server), but state files persist. On restart, `orra_list` shows the full history — you can re-spawn incomplete work.
 
+## Memory Layer
+
+Orra's directive pack writes to a markdown-based memory layer at
+`.orra/memory/` — dated journals, per-worktree notes, commitment
+tracking, and an index. Directives like `morning-briefing` and
+`shutdown-ritual` maintain it automatically when enabled.
+
+```
+.orra/memory/
+├── index.md              — landing note, auto-updated
+├── daily/                — one file per day, written by shutdown-ritual
+│   └── 2026-04-13.md
+├── worktrees/            — per-worktree notes, survive worktree deletion
+│   └── auth-refactor.md
+├── retros/               — weekly rollups (when Personal Retro is enabled)
+└── commitments.md        — Linear deadlines + ad-hoc promises
+```
+
+### Using Obsidian (or any markdown vault tool)
+
+Memory files use YAML frontmatter, `[[wikilinks]]`, and ISO date
+filenames so Obsidian, Logseq, Foam, or plain `grep` all read them
+the same way. No plugin required.
+
+**Setup with Obsidian:**
+
+1. In Obsidian, "Open folder as vault" → select `.orra/memory/`
+2. Settings → Core plugins → Daily notes → folder: `daily`, format: `YYYY-MM-DD`
+3. Settings → Files and Links → New link format: `Shortest path when possible`
+
+You now get backlinks, graph view, search, and daily notes for free.
+
+**⚠️ Secrets warning**
+
+Your daily notes will contain session context — task descriptions,
+decisions, sometimes code snippets. Before enabling Obsidian Sync,
+iCloud, Dropbox, or any cloud sync on this vault, make sure you're
+comfortable with that content leaving your machine.
+
+Recommended: use a **local-only** vault for `.orra/memory/`. If you
+want some of your memory synced (e.g. a "public" retros folder), make
+that a separate vault you opt into explicitly.
+
+Non-Obsidian users: the same files work with Logseq, Foam, or plain
+`grep` / `rg` / Claude-reading-files. Nothing is Obsidian-specific.
+
 ## Tools Reference
 
 ### Orchestrator Mode
