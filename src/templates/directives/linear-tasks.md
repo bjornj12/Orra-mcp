@@ -19,3 +19,7 @@ On startup, present the full picture: "Here's what you're working on (worktrees)
 On each 10-minute interval, re-fetch Linear and re-scan worktrees. Only notify me if something changed: a ticket status changed, a new ticket was assigned, a ticket is now overdue, or a worktree status changed. Don't repeat the full report if nothing changed — just say "all clear" or highlight what's different.
 
 Use /loop 10m to set up the recurring check.
+
+### Hand-off to Linear Deadline Tracker
+
+This directive focuses on *visibility and prioritization* of Linear tickets. For deadline and commitment tracking — what's due today, what's overdue, what ad-hoc promises you've made — use the `linear-deadline-tracker` directive alongside this one. That directive owns `.orra/memory/commitments.md`; this directive does not write to that file.

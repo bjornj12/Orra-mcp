@@ -14,7 +14,7 @@
     "LICENSE"
   ],
   "scripts": {
-    "build": "tsc && mkdir -p dist/templates/directives && cp src/templates/orchestrator.md dist/templates/orchestrator.md && cp src/templates/directives/*.md dist/templates/directives/",
+    "build": "tsc && mkdir -p dist/templates/directives dist/templates/memory && cp src/templates/orchestrator.md dist/templates/orchestrator.md && cp src/templates/directives/*.md dist/templates/directives/ && cp src/templates/memory/*.md dist/templates/memory/",
     "dev": "tsc --watch",
     "test": "vitest run",
     "test:watch": "vitest",
