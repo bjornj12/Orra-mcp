@@ -7,7 +7,7 @@ import { promisify } from "node:util";
 import { StateManager } from "./state.js";
 import { WorktreeManager } from "./worktree.js";
 import { slugify } from "./worktree.js";
-import { DEFAULT_HEADLESS_ALLOWED_TOOLS } from "./spawn-defaults.js";
+import { DEFAULT_HEADLESS_ALLOWED_TOOLS, ConcurrencyLimitError } from "./spawn-defaults.js";
 import { loadConfig } from "./config.js";
 import type { AgentState } from "../types.js";
 
@@ -63,6 +63,17 @@ export class AgentManager {
   }
 
   async spawnAgent(opts: SpawnOpts): Promise<SpawnResult> {
+    // 0. Concurrency check
+    const config = await loadConfig(this.projectRoot);
+    const limit = config.headlessSpawnConcurrency;
+    const allAgents = await this.state.listAgents();
+    const runningHeadless = allAgents.filter(
+      (a) => a.agentPersona === "headless-spawn" && a.status === "running"
+    ).length;
+    if (runningHeadless >= limit) {
+      throw new ConcurrencyLimitError(runningHeadless, limit);
+    }
+
     // 1. Generate agent ID
     const slug = slugify(opts.task) || "headless";
     const agentId = `${slug}-${randomSuffix()}`;
@@ -106,8 +117,7 @@ export class AgentManager {
     const logHandle = await open(logPath, "w");
     const logFd = logHandle.fd;
 
-    // 4. Build command
-    const config = await loadConfig(this.projectRoot);
+    // 4. Build command (config already loaded above for the concurrency check)
     const allowedTools = opts.allowedTools ?? DEFAULT_HEADLESS_ALLOWED_TOOLS;
     const model = opts.model ?? config.defaultModel ?? null;
 

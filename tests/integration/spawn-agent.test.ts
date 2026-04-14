@@ -138,3 +138,92 @@ describe("AgentManager.spawnAgent — new worktree", () => {
     expect(result.branch).toBe("feat/my-custom-branch");
   });
 });
+
+import { ConcurrencyLimitError } from "../../src/core/spawn-defaults.js";
+
+describe("AgentManager.spawnAgent — concurrency limit", () => {
+  it("throws ConcurrencyLimitError when at limit", async () => {
+    // Write a config with limit = 2
+    const orraDir = path.join(projectDir, ".orra");
+    await fs.mkdir(orraDir, { recursive: true });
+    await fs.writeFile(
+      path.join(orraDir, "config.json"),
+      JSON.stringify({
+        markers: ["spec.md"],
+        staleDays: 3,
+        worktreeDir: "worktrees",
+        driftThreshold: 20,
+        defaultModel: null,
+        defaultAgent: null,
+        providers: [],
+        providerCache: { ttl: 5000 },
+        headlessSpawnConcurrency: 2,
+      }),
+    );
+
+    // Spawn two long-running agents
+    const a = await manager.spawnAgent({
+      task: "long one a",
+      reason: "concurrency test",
+      _spawnCommand: ["node", "-e", "setTimeout(() => process.exit(0), 5000);"],
+    });
+    const b = await manager.spawnAgent({
+      task: "long one b",
+      reason: "concurrency test",
+      _spawnCommand: ["node", "-e", "setTimeout(() => process.exit(0), 5000);"],
+    });
+
+    // Third spawn should reject
+    await expect(
+      manager.spawnAgent({
+        task: "third one",
+        reason: "should hit limit",
+        _spawnCommand: ["node", "-e", "process.exit(0);"],
+      })
+    ).rejects.toBeInstanceOf(ConcurrencyLimitError);
+
+    // Cleanup: kill the long-running children and wait for them to actually exit
+    // so afterEach's fs.rm doesn't race against open file handles.
+    try { process.kill(a.pid, "SIGTERM"); } catch {}
+    try { process.kill(b.pid, "SIGTERM"); } catch {}
+    await new Promise((r) => setTimeout(r, 200));
+  });
+
+  it("allows spawning again once a slot frees up", async () => {
+    const orraDir = path.join(projectDir, ".orra");
+    await fs.mkdir(orraDir, { recursive: true });
+    await fs.writeFile(
+      path.join(orraDir, "config.json"),
+      JSON.stringify({
+        markers: ["spec.md"],
+        staleDays: 3,
+        worktreeDir: "worktrees",
+        driftThreshold: 20,
+        defaultModel: null,
+        defaultAgent: null,
+        providers: [],
+        providerCache: { ttl: 5000 },
+        headlessSpawnConcurrency: 1,
+      }),
+    );
+
+    // Spawn one short-lived agent
+    const first = await manager.spawnAgent({
+      task: "quick one",
+      reason: "free up slot",
+      _spawnCommand: ["node", "-e", "process.exit(0);"],
+    });
+
+    // Wait for it to complete
+    await new Promise((r) => setTimeout(r, 200));
+
+    // Should now be able to spawn another
+    const second = await manager.spawnAgent({
+      task: "second quick one",
+      reason: "slot is free",
+      _spawnCommand: ["node", "-e", "process.exit(0);"],
+    });
+
+    expect(second.agentId).not.toBe(first.agentId);
+  });
+});
