@@ -37,9 +37,9 @@ After `linear-tasks` runs its initial fetch (or, if `linear-tasks` is not enable
 
 ### On Every 10-Minute Interval
 
-If `linear-tasks` is running its own `/loop 10m`, piggyback on it: after `linear-tasks` finishes its pass, re-run the deadline refresh. Don't start a second loop.
+**Strict piggyback rule:** If `linear-tasks` is also installed, do **not** start your own `/loop`. Wait for `linear-tasks` to finish its 10-minute pass and then refresh commitments at the tail of the same interval. Two loops querying Linear in parallel waste tokens and risk double-notifications for the same change.
 
-If `linear-tasks` is *not* enabled, start your own: `/loop 10m` refreshing only the commitments file.
+Only if `linear-tasks` is **not** installed, start your own `/loop 10m` that refreshes only the commitments file.
 
 **On each refresh, only notify the user if something changed meaningfully:**
 - A new Linear ticket gained a due date within the warning window → surface it

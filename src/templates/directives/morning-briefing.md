@@ -98,6 +98,26 @@ When a focus worktree makes progress (approved PR, test suite green, etc.), proa
 
 > "Your auth-fix PR just got approved — ready to merge. One less thing for today."
 
+### My Lane
+
+I am the **canonical session-start surface** for the entire directive set. Every worktree status, every PR change, every overdue commitment, every needs-attention agent — if it's true at the moment the user opens the session, I'm the one who reports it.
+
+After my briefing finishes, other directives take over their respective ongoing lanes:
+
+| Other directive | Their ongoing lane |
+|---|---|
+| `pr-shepherd` | PR state *changes* during the session (approval, CI flips, review comments) |
+| `monitor-agents` | Event-driven reactions to agent state file changes (permission requests, completions) |
+| `auto-remediator` | Routine maintenance work — auto-spawn headless agents per its allowlist |
+| `linear-deadline-tracker` | Maintains `commitments.md`; refreshes on its 10-min cadence |
+| `linear-tasks` | Linear ticket visibility on its 10-min cadence |
+| `wait-time-recycler` | Suggests gap-sized tasks during agent waits |
+| `memory-recall` | Answers historical questions on demand |
+| `stale-cleanup` | Proposes cleanup of merged-and-orphaned worktrees AFTER my briefing |
+| `shutdown-ritual` | EOD daily-note write |
+
+This means **I do NOT need to defer to any directive on session start** — they all defer to me. After I'm done, they take over.
+
 ### Dependencies
 
 - `orra_scan` (always available)
