@@ -5,6 +5,7 @@ import * as os from "node:os";
 import {
   getOrComputeSummary,
   invalidateSummary,
+  readLogTail,
   CURRENT_SUMMARY_SCHEMA_VERSION,
   MAX_TAIL_BYTES,
 } from "../../src/core/summary.js";
@@ -284,6 +285,41 @@ describe("getOrComputeSummary — scoring", () => {
     expect(summary.likelyStuckReason).toMatch(/no output for \d+m/);
   });
 
+  it("does not report 'stuck on errorPattern' for a failed agent", async () => {
+    // A failed agent with an errorPattern in its log should NOT be labeled
+    // as currently stuck — it's already done. The errorPattern still adds
+    // to the score via scoreSummary, but likelyStuckReason should not be
+    // "stuck on X" for a non-running agent.
+    const logFile = path.join(agentsDir, "agent-1.log");
+    await fs.writeFile(logFile, "Error: ENOENT: no such file");
+
+    const failedAgent: AgentState = { ...fakeAgent, status: "failed" };
+    const summary = await getOrComputeSummary("agent-1", failedAgent, {
+      stateDir: agentsDir,
+      now: () => new Date(),
+    });
+
+    expect(summary.likelyStuckReason).toBeNull();
+    // Score still includes errorPattern (+15) and failed (+40) = 55
+    expect(summary.needsAttentionScore).toBeGreaterThanOrEqual(40);
+  });
+
+  it("still reports 'stuck on errorPattern' for a running agent", async () => {
+    // Sanity: the running case (which is what the rule was designed for)
+    // still works.
+    const logFile = path.join(agentsDir, "agent-1.log");
+    await fs.writeFile(logFile, "Error: ENOENT: no such file");
+
+    const runningAgent: AgentState = { ...fakeAgent, status: "running" };
+    const summary = await getOrComputeSummary("agent-1", runningAgent, {
+      stateDir: agentsDir,
+      // Use updatedAt as now so the no-output-timeout branch doesn't fire instead.
+      now: () => new Date(fakeAgent.updatedAt),
+    });
+
+    expect(summary.likelyStuckReason).toBe("stuck on ENOENT");
+  });
+
   it("clamps score to 0–100", async () => {
     // Pile up everything
     const logFile = path.join(agentsDir, "agent-1.log");
@@ -325,5 +361,38 @@ describe("invalidateSummary", () => {
 
   it("is a no-op when no summary file exists", async () => {
     await expect(invalidateSummary("nonexistent", agentsDir)).resolves.toBeUndefined();
+  });
+});
+
+describe("readLogTail — bounded read", () => {
+  it("returns at most MAX_TAIL_BYTES from the end of the file", async () => {
+    const file = path.join(agentsDir, "huge.log");
+    const totalSize = 200 * 1024;
+    await fs.writeFile(file, "x".repeat(totalSize));
+
+    const stat = await fs.stat(file);
+    expect(stat.size).toBe(totalSize);
+
+    const result = await readLogTail(file);
+    expect(result).not.toBeNull();
+    // The returned text length is exactly MAX_TAIL_BYTES — proves the seek math worked.
+    // If the bounded read regresses (reads from offset 0), the length would be totalSize.
+    expect(result!.text.length).toBe(MAX_TAIL_BYTES);
+  });
+
+  it("returns the full file when smaller than MAX_TAIL_BYTES", async () => {
+    const file = path.join(agentsDir, "small.log");
+    const content = "Tests: 3 passed\nDone.";
+    await fs.writeFile(file, content);
+
+    const result = await readLogTail(file);
+    expect(result).not.toBeNull();
+    expect(result!.text).toBe(content);
+    expect(result!.text.length).toBe(content.length);
+  });
+
+  it("returns null when the file does not exist", async () => {
+    const result = await readLogTail(path.join(agentsDir, "nope.log"));
+    expect(result).toBeNull();
   });
 });

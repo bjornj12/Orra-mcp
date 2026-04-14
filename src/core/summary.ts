@@ -19,7 +19,7 @@ function summaryPath(stateDir: string, agentId: string): string {
   return path.join(stateDir, `${agentId}.summary.json`);
 }
 
-async function readLogTail(file: string): Promise<{ text: string; mtime: Date } | null> {
+export async function readLogTail(file: string): Promise<{ text: string; mtime: Date } | null> {
   let stat;
   try {
     stat = await fs.stat(file);
@@ -81,7 +81,13 @@ function deriveStuckReason(
 ): string | null {
   if (agent.pendingQuestion) return `awaiting permission: ${agent.pendingQuestion.tool}`;
   if (signals.loopDetected) return "loop: same line repeats in tail";
-  if (signals.errorPattern) return `stuck on ${signals.errorPattern}`;
+  // "Stuck on X" only makes sense for an agent that's still trying. A failed,
+  // interrupted, or completed agent isn't stuck — it's done. The error pattern
+  // still contributes to needsAttentionScore via scoreSummary; we just don't
+  // label the agent as currently blocked by it.
+  if (signals.errorPattern && agent.status === "running") {
+    return `stuck on ${signals.errorPattern}`;
+  }
   if (agent.status === "running") {
     const updated = new Date(agent.updatedAt).getTime();
     const idleMs = now.getTime() - updated;
@@ -117,7 +123,8 @@ async function currentLogMtime(stateDir: string, agentId: string): Promise<strin
 }
 
 async function writeSummaryAtomic(file: string, summary: AgentSummary): Promise<void> {
-  const tmp = file + ".tmp";
+  // Suffix with pid so concurrent writes from different processes can't stomp each other's tmp file.
+  const tmp = `${file}.${process.pid}.tmp`;
   await fs.writeFile(tmp, JSON.stringify(summary, null, 2));
   await fs.rename(tmp, file);
 }
@@ -181,6 +188,10 @@ export async function getOrComputeSummary(
   return computeFresh(agentId, agent, deps);
 }
 
+// Public API for future kill-with-cleanup flows. v2 deliberately persists agent
+// state files across sessions, so today there's no in-tree caller — this exists
+// so external code (or a future opt-in cleanup mode) can drop the cache for a
+// removed agent without reaching into summary.ts internals.
 export async function invalidateSummary(agentId: string, stateDir: string): Promise<void> {
   try {
     await fs.unlink(summaryPath(stateDir, agentId));
