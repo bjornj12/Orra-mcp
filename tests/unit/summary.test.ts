@@ -5,6 +5,7 @@ import * as os from "node:os";
 import {
   getOrComputeSummary,
   invalidateSummary,
+  readLogTail,
   CURRENT_SUMMARY_SCHEMA_VERSION,
   MAX_TAIL_BYTES,
 } from "../../src/core/summary.js";
@@ -325,5 +326,38 @@ describe("invalidateSummary", () => {
 
   it("is a no-op when no summary file exists", async () => {
     await expect(invalidateSummary("nonexistent", agentsDir)).resolves.toBeUndefined();
+  });
+});
+
+describe("readLogTail — bounded read", () => {
+  it("returns at most MAX_TAIL_BYTES from the end of the file", async () => {
+    const file = path.join(agentsDir, "huge.log");
+    const totalSize = 200 * 1024;
+    await fs.writeFile(file, "x".repeat(totalSize));
+
+    const stat = await fs.stat(file);
+    expect(stat.size).toBe(totalSize);
+
+    const result = await readLogTail(file);
+    expect(result).not.toBeNull();
+    // The returned text length is exactly MAX_TAIL_BYTES — proves the seek math worked.
+    // If the bounded read regresses (reads from offset 0), the length would be totalSize.
+    expect(result!.text.length).toBe(MAX_TAIL_BYTES);
+  });
+
+  it("returns the full file when smaller than MAX_TAIL_BYTES", async () => {
+    const file = path.join(agentsDir, "small.log");
+    const content = "Tests: 3 passed\nDone.";
+    await fs.writeFile(file, content);
+
+    const result = await readLogTail(file);
+    expect(result).not.toBeNull();
+    expect(result!.text).toBe(content);
+    expect(result!.text.length).toBe(content.length);
+  });
+
+  it("returns null when the file does not exist", async () => {
+    const result = await readLogTail(path.join(agentsDir, "nope.log"));
+    expect(result).toBeNull();
   });
 });
