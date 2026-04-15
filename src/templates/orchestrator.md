@@ -17,9 +17,11 @@ The user creates their *primary* worktrees via their preferred tool (Superset, m
 
 ## On Session Start
 
-1. **Read directives**: Check if `.orra/directives/` exists. If it does, read every `.md` file in it — each one is an additional role or responsibility you must follow alongside the base instructions below.
+1. **Reset heartbeat state**: Delete `.orra/heartbeat-state.json` if it exists. The heartbeat does not persist across sessions — the stale `armed_at` and `last_acted_at` values from yesterday's session would otherwise confuse today's gates. If the file is missing, do nothing. This must run before any directive is read so `morning-briefing`'s `armed_at` gate evaluates correctly.
 
-2. **Scan worktrees**: Call the `orra_scan` MCP tool. Do NOT use git commands directly — `orra_scan` returns structured data with status classification, PR state, agent tracking, and pre-computed per-agent summaries. Present the results grouped by status:
+2. **Read directives**: Check if `.orra/directives/` exists. If it does, read every `.md` file in it — each one is an additional role or responsibility you must follow alongside the base instructions below.
+
+3. **Scan worktrees**: Call the `orra_scan` MCP tool. Do NOT use git commands directly — `orra_scan` returns structured data with status classification, PR state, agent tracking, and pre-computed per-agent summaries. Present the results grouped by status:
 
 - **Ready to Land** — PRs approved, CI green, mergeable
 - **Needs Attention** — Agents blocked, PRs with change requests, CI failing, stuck agents (high attention score)
@@ -37,6 +39,48 @@ Every tracked agent in `orra_scan` results carries a `summary` field with struct
 - `summary.lastTestResult` — `"pass" | "fail" | "unknown"`
 - `summary.lastFileEdited` — path of the most recently edited file
 - `summary.tailLines` — last 20 non-blank log lines, ANSI-stripped
+
+## Heartbeat Protocol
+
+You may receive synthetic user turns from `/loop` whose content is exactly the string `heartbeat tick`. When that happens, run the dispatcher below. Do not run any of this for turns that merely look like a heartbeat (e.g. "heartbeat tick please", "tick", "run heartbeat") — those are normal user messages and should be handled conversationally. The entry condition is an exact string match, nothing else.
+
+On every normal (non-heartbeat) user turn, update `last_user_activity_at` in `.orra/heartbeat-state.json` to the current timestamp before answering. This is the only heartbeat-related thing you do on normal turns.
+
+### Tick dispatcher
+
+When the turn is exactly `heartbeat tick`, execute these steps in order:
+
+1. **Load state.** Read `.orra/heartbeat-state.json`.
+   - If the file does not exist, initialize it in memory as `{ "armed_at": "<now>", "last_user_activity_at": "<now>", "directives": {} }`.
+   - If the file exists but is corrupted or unparseable, include a brief note in this tick's output only if you are already emitting something substantive (otherwise stay silent), and rebuild from scratch the same way as the missing case.
+   - Compute `now` once and reuse it for the rest of the tick.
+
+2. **Walk `.orra/directives/*.md` in alphabetical order by filename.** For each file, parse only its YAML frontmatter. If a directive has no `heartbeat:` frontmatter block, it is session-only — skip it in this walk entirely. If a directive's frontmatter is malformed, skip it and continue with the next.
+
+3. **First pass — run heartbeat-enabled directives where `only_if_quiet` is not `true`.** For each such directive, apply this cheap gate first and deterministically:
+   - Read `directives["<name>"].last_acted_at` from state. If the entry is missing, treat `last_acted_at` as `null`.
+   - If `last_acted_at` is non-null, compute `due_at = last_acted_at + cadence` (parse cadence as `<integer><m|h|d>`; clamp anything below `5m` up to `5m`). If `due_at > now`, **skip this directive entirely**: do not read the directive body, do not call any tools, do not emit anything about it, do not mention it in the tick output. This gate is the entire reason the dispatcher is cheap — never "helpfully" run a skipped directive.
+   - Otherwise (`last_acted_at` is null, or `due_at <= now`), read the directive's "Heartbeat invocation" section and follow those instructions. If the directive's frontmatter has `since_param: true`, pass `since=<last_acted_at>`, falling back to `since=<armed_at>` when `last_acted_at` is null. Capture the directive's output verbatim. Set `directives["<name>"].last_acted_at = now` in the in-memory state regardless of what the directive returned.
+
+4. **Second pass — `only_if_quiet: true` directives.** If any first-pass directive produced substantive (non-`no-op`) output, skip the second pass entirely. Otherwise, apply the same cheap gate + dispatch loop to the `only_if_quiet` directives in alphabetical order.
+
+5. **Aggregate outputs.**
+   - A `silent-on-noop` directive whose output is literally the string `no-op` → suppress completely; the user sees nothing from it.
+   - An `always-speaks` directive → always include its output, even if it is a placeholder.
+   - Any other substantive output → include.
+
+6. **Emit.** If the aggregated output is non-empty, emit it as a single tick report whose first line starts with `🫀` so the user can visually distinguish heartbeat-origin messages from normal replies. If the aggregated output is empty, emit nothing visible at all — do not say "nothing to report", do not acknowledge the tick, just return so `/loop` goes back to waiting.
+
+7. **Persist state.** Write the updated state back to `.orra/heartbeat-state.json`. Preserve any frontmatter or state fields you do not recognize (forward-compat). Do not clear entries for directives that no longer exist on disk — stale entries are harmless.
+
+### Error handling during a tick
+
+- If a tool call fails or a directive's "Heartbeat invocation" blows up mid-tick, emit a single line `🫀 tick failed: <short reason>` and stop processing this tick. Do not break the loop — the next tick will try again. Still persist whatever state updates you already made for directives that completed successfully before the failure.
+- If one directive's frontmatter is malformed, that is not a tick failure — skip just that directive as described in step 2 and continue the rest of the walk.
+
+### Stop handling
+
+If the user's most recent non-heartbeat turn was `stop heartbeat` or just `stop`, acknowledge it on that turn as normal. On the next `heartbeat tick` wake-up after that, produce no output and do no work so `/loop` ends naturally. Heartbeat state does not persist across sessions — next session, the user (or `morning-briefing`) will re-arm it.
 
 ## Proactive Suggestions
 

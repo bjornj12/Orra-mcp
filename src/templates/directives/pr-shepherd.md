@@ -1,3 +1,11 @@
+---
+heartbeat:
+  cadence: 5m
+  output: silent-on-noop
+  since_param: true
+  only_if_quiet: false
+---
+
 ## PR Shepherd
 
 Monitor open PRs across worktrees and keep them moving toward merge. Specializes in **PR-specific signals** that other directives don't track: review comments, draft staleness, CI failures, approval-but-unmerged delays.
@@ -41,3 +49,31 @@ If `morning-briefing` is NOT installed, run a one-time PR scan after the user's 
 | `monitor-agents` | Agent-state events on the worktrees behind PRs (I track PR state, not agent state) |
 
 I own: review comment surveillance, draft staleness, post-approval merge nudging, CI-failed diagnosis.
+
+## Heartbeat invocation
+
+When the dispatcher wakes this directive with `since=<timestamp>`, do NOT sweep every open PR. Run a time-windowed diff on PRs that actually changed since `since`:
+
+1. Query for touched PRs. `since` arrives as an ISO timestamp (e.g. `2026-04-15T11:30:00Z`); GitHub's search syntax uses a date, so strip the time and use a `>=` to be safe:
+   ```
+   gh pr list --search "is:open updated:>$since" --json number,title,headRefName,updatedAt,author,isDraft
+   ```
+   Or, if you already know the set of worktrees backed by PRs from the last `orra_scan`, narrow with `--author @me` or explicit `--head` filters when that matches the user's workflow.
+
+2. For each PR in the result, pull just enough detail to classify the transition:
+   ```
+   gh pr view <number> --json state,mergeable,reviewDecision,statusCheckRollup,comments
+   ```
+
+3. Surface only **transitions** that happened since `since` — not the steady state. Compare the current value to what you would have seen at `since` (use the PR's own timestamps on checks, reviews, and comments to confirm the change actually landed in this window):
+   - **CI flips:** pending → green, any → failing, failing → green
+   - **Review state changes:** any → `APPROVED`, any → `CHANGES_REQUESTED`
+   - **Mergeable flips:** `CONFLICTING` → `MERGEABLE` (unblocks a merge), `MERGEABLE` → `CONFLICTING` (needs rebase)
+   - **New review comments** on PRs the user owns, where `comment.createdAt > since`
+   - **Draft → ready for review**, or a newly-opened PR updated within the window
+
+4. Format each transition as one line, leading with the PR number and the verb (e.g. `#9239 approved by @bob — ready to merge`, `#9241 CI turned red on test-suite-node`, `#9244 new review comment from @alice`). Aggregate into a short bullet list.
+
+**No-op condition:** if the `gh pr list` query returns zero PRs, OR every returned PR's state at `since` is the same as its state now (no CI flip, no review decision change, no mergeable flip, no new comments in-window), return exactly the literal string `no-op` and nothing else. Steady state is silence.
+
+Do not re-report transitions that a previous tick already surfaced — the `since` window is there precisely to prevent that. Do not nag about approved-but-unmerged PRs here; that belongs to the regular "Nudges" section on normal user turns, not heartbeat ticks.

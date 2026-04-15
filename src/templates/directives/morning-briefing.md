@@ -124,3 +124,29 @@ This means **I do NOT need to defer to any directive on session start** — they
 - `.orra/memory/daily/` (created by `orra_setup`)
 - `.orra/memory/commitments.md` (optional — skip gracefully if missing)
 - Linear MCP tools (optional — only if `linear-tasks` directive is also enabled)
+
+## Heartbeat bootstrap
+
+This directive is session-only — it does NOT have a `heartbeat:` frontmatter block and never auto-fires on a heartbeat tick. Its only interaction with the heartbeat is to arm the loop on session start.
+
+**Double-arm guard.** Before printing the arming prompt, check `.orra/heartbeat-state.json`:
+
+- If the file exists AND contains a non-null `armed_at` field, the heartbeat is already armed in this session. **Stay silent** — do not print the bootstrap block. The morning briefing still does everything else above; it just skips the arming prompt. This prevents accidental double-arming when the user re-runs the briefing in the same session.
+- If the file does not exist, OR it exists but `armed_at` is missing/null, proceed to print the bootstrap block below.
+
+**The bootstrap block.** After the normal morning briefing finishes — after the "Recommended first action" and "What's your plan for the day?" lines — append exactly this text as the final thing in the briefing output:
+
+```
+🫀 Heartbeat ready. To arm it (auto-checks your directives every 5 min,
+   surfaces only what changed), paste:
+
+   /loop 5m heartbeat tick
+
+   Say "stop heartbeat" or just "stop" anytime to end it.
+```
+
+Use the exact text above, including the 🫀 emoji, the indentation, the `/loop 5m heartbeat tick` command on its own line, and the stop instructions. Do not paraphrase, do not add preamble, do not add trailing commentary. The user will paste the `/loop 5m heartbeat tick` command once, and Claude Code's native `/loop` will then inject synthetic `heartbeat tick` turns every 5 minutes for the remainder of the session.
+
+**Do not print the block more than once per session.** If you already printed it and the user has not yet pasted the command, that's fine — they'll see it in scrollback. Re-running the briefing should not re-print it; the `armed_at` gate handles the case where arming has happened, and tracking "already-printed" within an unarmed session is the responsibility of the persona's session memory (you can simply remember you showed it).
+
+**Do not invoke `/loop` yourself.** Model output renders as plain text in Claude Code — the `/loop 5m heartbeat tick` line in the block above is information for the user to paste, not a command you can run. There is no stock mechanism for a directive, MCP tool, hook, or persona instruction to execute a slash command on its own. One paste per session is the minimum friction achievable and is the deliberate v1 design.

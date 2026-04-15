@@ -1,3 +1,11 @@
+---
+heartbeat:
+  cadence: 1h
+  output: silent-on-noop
+  since_param: true
+  only_if_quiet: false
+---
+
 ## Linear Deadline Tracker
 
 *Requires: [linear-mcp](https://github.com/jerhadf/linear-mcp) installed as an MCP server. Works best alongside the `linear-tasks` directive.*
@@ -67,3 +75,30 @@ These persist in `commitments.md` alongside Linear entries and are never overwri
 
 - Linear MCP tools
 - `.orra/memory/commitments.md` (created by `orra_setup`)
+
+## Heartbeat invocation
+
+When the dispatcher wakes this directive with `since=<timestamp>`, do NOT rewrite `.orra/memory/commitments.md` or re-fetch every ticket with a deadline. The heartbeat job is narrower: flag tickets that crossed a **warning threshold** in this window and haven't already been flagged.
+
+Warning thresholds, by ticket priority:
+- **Urgent:** flag once when `dueDate` comes within 1 week
+- **High:** flag once when `dueDate` comes within 3 days
+- **Normal / Low:** flag once when `dueDate` comes within 1 day
+
+Steps:
+
+1. Query Linear for assigned tickets with a non-null `dueDate` where `state.type !== "completed"`. This is a small set — no time-window filter needed on the query itself, because deadlines only matter for tickets still in flight.
+
+2. For each ticket, compute `hours_until_due = dueDate - now` and determine whether the ticket is *inside* its priority's warning threshold **right now**.
+
+3. Determine whether the ticket was *outside* the threshold at `since` but is *inside* now. In other words, it crossed the threshold in this window. If yes, flag it. If it was already inside the threshold at `since`, a previous tick already flagged it — stay silent. `since` is the whole point of this directive's heartbeat shape: it's what prevents re-flagging the same ticket every hour.
+
+4. For each newly-flagged ticket, emit one line with the identifier, title, priority, and a concrete recovery prompt:
+   > `AUTH-142 (Urgent) due in 6d — JWT refresh. Want to block time today?`
+   > `BILLING-87 (High) due in 2d — Stripe webhook retry. Status: In Progress. On track?`
+
+   Do not auto-propose recovery actions at the full "options (a)/(b)/(c)" detail from the normal invocation — that's too heavy for a heartbeat digest. A single-line prompt is enough.
+
+5. **Do not touch `commitments.md` on heartbeat ticks.** That file is only rewritten on session-start and on the 10-minute piggyback pass described above. Heartbeat flags are ephemeral notifications, not persistent state.
+
+**No-op condition:** if no assigned ticket crossed a warning threshold since `since`, return exactly the literal string `no-op` and nothing else. At a 1-hour cadence with threshold windows measured in days, the overwhelming majority of ticks will be no-op — that's correct.
