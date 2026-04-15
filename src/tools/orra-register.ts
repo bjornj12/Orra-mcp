@@ -4,36 +4,55 @@ import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { isSafeWorktreeId } from "../core/validation.js";
 
 const execFileAsync = promisify(execFile);
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 
+// orra_register accepts either a worktree ID OR an absolute path, so we
+// can't use SafeWorktreeIdSchema directly. Validate explicitly below.
 export const orraRegisterSchema = z.object({
-  worktree: z.string().describe("Worktree ID (directory name under worktrees/) or absolute path"),
+  worktree: z
+    .string()
+    .min(1)
+    .refine(
+      (v) => path.isAbsolute(v) || isSafeWorktreeId(v),
+      {
+        message:
+          "Worktree must be an absolute path or a safe ID (alphanumerics, underscores, hyphens, 1-100 chars)",
+      },
+    )
+    .describe("Worktree ID (directory name under worktrees/) or absolute path"),
 });
 
 export async function handleOrraRegister(
   projectRoot: string,
   args: z.infer<typeof orraRegisterSchema>,
 ) {
-  // Resolve worktree path — could be an ID or absolute path
-  let worktreePath: string;
-  let worktreeId: string;
-
-  if (path.isAbsolute(args.worktree)) {
-    worktreePath = args.worktree;
-    worktreeId = path.basename(worktreePath);
-  } else {
-    worktreeId = args.worktree;
-    // Find the worktree path from git worktree list
-    const resolved = await findWorktreePath(projectRoot, worktreeId);
-    if (!resolved) {
-      return {
-        content: [{ type: "text" as const, text: `Error: Worktree "${worktreeId}" not found. Run orra_scan to see available worktrees.` }],
-        isError: true,
-      };
-    }
-    worktreePath = resolved;
+  // Always resolve against `git worktree list` so we never trust a raw
+  // path or ID to end up in the filesystem. The final `worktreeId` is
+  // derived from the real resolved path, and validated as a safe ID
+  // before any file operations use it.
+  const resolved = await resolveWorktree(projectRoot, args.worktree);
+  if (!resolved) {
+    return {
+      content: [{
+        type: "text" as const,
+        text: `Error: Worktree "${args.worktree}" is not a registered git worktree. Run 'git worktree list' to see available worktrees.`,
+      }],
+      isError: true,
+    };
+  }
+  const worktreePath = resolved;
+  const worktreeId = path.basename(worktreePath);
+  if (!isSafeWorktreeId(worktreeId)) {
+    return {
+      content: [{
+        type: "text" as const,
+        text: `Error: Worktree directory name "${worktreeId}" is not a safe identifier (must be alphanumerics, underscores, or hyphens).`,
+      }],
+      isError: true,
+    };
   }
 
   // 1. Install hooks in the worktree's .claude/settings.local.json
@@ -126,18 +145,22 @@ export async function handleOrraRegister(
   };
 }
 
-async function findWorktreePath(projectRoot: string, worktreeId: string): Promise<string | null> {
+async function resolveWorktree(projectRoot: string, input: string): Promise<string | null> {
   try {
     const { stdout } = await execFileAsync("git", ["worktree", "list", "--porcelain"], { cwd: projectRoot });
     const blocks = stdout.split("\n\n");
     for (const block of blocks) {
       const lines = block.trim().split("\n");
       const worktreeLine = lines.find(l => l.startsWith("worktree "));
-      if (worktreeLine) {
-        const wtPath = worktreeLine.replace("worktree ", "");
-        if (path.basename(wtPath) === worktreeId) {
+      if (!worktreeLine) continue;
+      const wtPath = worktreeLine.replace("worktree ", "");
+      // Match by exact absolute path OR by basename (legacy ID form).
+      if (path.isAbsolute(input)) {
+        if (path.resolve(wtPath) === path.resolve(input)) {
           return wtPath;
         }
+      } else if (path.basename(wtPath) === input) {
+        return wtPath;
       }
     }
   } catch {}

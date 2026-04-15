@@ -1,18 +1,26 @@
 #!/usr/bin/env node
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { isSafeWorktreeId } from "../core/validation.js";
 
 // --- Exported helpers for testing ---
 
 export function resolveAgentId(env: Record<string, string | undefined>, projectRoot: string): string | null {
-  if (env.ORRA_AGENT_ID) return env.ORRA_AGENT_ID;
+  const raw = env.ORRA_AGENT_ID ?? (() => {
+    const selfIdPath = path.join(projectRoot, ".orra", "agents", "self.id");
+    try {
+      return fs.readFileSync(selfIdPath, "utf-8").trim();
+    } catch {
+      return null;
+    }
+  })();
 
-  const selfIdPath = path.join(projectRoot, ".orra", "agents", "self.id");
-  try {
-    return fs.readFileSync(selfIdPath, "utf-8").trim();
-  } catch {
-    return null;
-  }
+  // Defense-in-depth: the agent ID flows into filesystem paths
+  // (.orra/agents/<id>.json, .answer.json). Reject anything that
+  // doesn't look like a safe ID — an attacker with write access to
+  // self.id would otherwise get a path-traversal primitive.
+  if (!raw || !isSafeWorktreeId(raw)) return null;
+  return raw;
 }
 
 export function buildPermissionResponse(allow: boolean): object {

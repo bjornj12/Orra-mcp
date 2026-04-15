@@ -1,9 +1,10 @@
 import { z } from "zod";
 import * as fsp from "node:fs/promises";
 import * as path from "node:path";
+import { SafeWorktreeIdSchema } from "../core/validation.js";
 
 export const orraUnblockSchema = z.object({
-  worktree: z.string().describe("Worktree ID"),
+  worktree: SafeWorktreeIdSchema.describe("Worktree ID"),
   allow: z.boolean().describe("Allow or deny the permission request"),
   reason: z.string().optional().describe("Explanation (shown to agent on deny)"),
 });

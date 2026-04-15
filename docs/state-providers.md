@@ -84,6 +84,16 @@ This means you can start with a provider that only populates `stage` and gradual
 4. **Identify yourself in `provider.name`** so it shows up in `result.providerStatus.used`.
 5. **Keep it fast.** Orra's cache TTL defaults to 5s, but `orra_scan` runs on every user action — if your endpoint is slow, raise the cache TTL or move expensive work into a pre-computed file.
 
+## Security: `.orra/config.json` is effectively executable
+
+Because the `command` provider runs whatever program the config points at, `.orra/config.json` should be treated like a shell script you're sourcing: **trust it the same way you'd trust a script in your own dotfiles**.
+
+- Do not commit `.orra/config.json` to a shared repo (`orra_setup` adds `.orra/` to `.gitignore` precisely for this reason).
+- Do not copy a config from an untrusted source without reading it first.
+- If you accept a PR that modifies `.orra/config.json`, review the `command` and `env` fields the same way you'd review a shell command.
+
+Orra's `http` and `file` providers don't execute code, but all three share the same config surface — so the same trust rule applies across the board.
+
 ## Minimum viable provider
 
 The smallest legal provider is a shell command that emits a JSON literal:

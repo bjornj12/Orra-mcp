@@ -1,8 +1,9 @@
 import { z } from "zod";
 import { inspectOne } from "../core/awareness.js";
+import { SafeWorktreeIdSchema } from "../core/validation.js";
 
 export const orraInspectSchema = z.object({
-  worktree: z.string().describe("Worktree ID or path"),
+  worktree: SafeWorktreeIdSchema.describe("Worktree ID"),
 });
 
 export async function handleOrraInspect(projectRoot: string, args: z.infer<typeof orraInspectSchema>) {

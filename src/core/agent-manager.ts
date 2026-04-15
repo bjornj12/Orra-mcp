@@ -9,6 +9,7 @@ import { WorktreeManager } from "./worktree.js";
 import { slugify } from "./worktree.js";
 import { DEFAULT_HEADLESS_ALLOWED_TOOLS, ConcurrencyLimitError } from "./spawn-defaults.js";
 import { loadConfig } from "./config.js";
+import { isSafeWorktreeId } from "./validation.js";
 import type { AgentState } from "../types.js";
 
 const execFileAsync = promisify(execFile);
@@ -230,6 +231,9 @@ export class AgentManager {
     allow: boolean,
     reason?: string,
   ): Promise<void> {
+    if (!isSafeWorktreeId(agentId)) {
+      throw new Error(`Invalid agent ID: ${agentId}`);
+    }
     const agent = await this.state.loadAgent(agentId);
     if (!agent) throw new Error(`Agent ${agentId} not found`);
 

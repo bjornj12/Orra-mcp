@@ -1,9 +1,10 @@
 import { z } from "zod";
 import type { AgentManager } from "../core/agent-manager.js";
 import { WorktreeManager } from "../core/worktree.js";
+import { SafeWorktreeIdSchema } from "../core/validation.js";
 
 export const orraRebaseSchema = z.object({
-  worktree: z.string().describe("Worktree ID"),
+  worktree: SafeWorktreeIdSchema.describe("Worktree ID"),
 });
 
 export async function handleOrraRebase(manager: AgentManager, projectRoot: string, args: z.infer<typeof orraRebaseSchema>) {
