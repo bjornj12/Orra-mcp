@@ -1,3 +1,11 @@
+---
+heartbeat:
+  cadence: 5m
+  output: silent-on-noop
+  since_param: true
+  only_if_quiet: false
+---
+
 ## Real-time Agent Monitor
 
 *Requires: `fswatch` installed (`brew install fswatch`)*
@@ -106,3 +114,20 @@ These checks don't come from Monitor events — run them on your normal scan cad
 You are not passively watching — you are the first responder. Permission requests should be resolved in seconds. Stuck agents should be diagnosed before the user notices. Completions should be surfaced immediately. The goal is zero dead time for agents.
 
 The pre-inspection cache does the heavy lifting (parsing, scoring, stuck-detection) so you don't have to. Read the structured `summary` fields from `orra_scan` and react — don't re-parse logs yourself.
+
+## Heartbeat invocation
+
+When the dispatcher wakes this directive with `since=<timestamp>`, do NOT run a full `fswatch`-style sweep. Run a cheap time-windowed diff instead:
+
+1. Call `orra_scan`. The scan is cheap — it reads pre-computed summaries from disk.
+2. For each tracked agent, look at its state file in `.orra/agents/<id>.json`. Treat any agent whose state file `mtime` is strictly after `since` as "touched this window"; ignore the rest. (The `since` value is the ISO timestamp passed by the dispatcher, or `armed_at` on the first tick.)
+3. For each touched agent, compare its current signals to what the previous tick knew. Specifically, surface transitions that happened since `since`:
+   - `status` changed from `running` to `idle` (completed), `failed`, or `interrupted`
+   - `agent.pendingQuestion` newly appeared (permission request — auto-approve safe operations via `orra_unblock` per the allowlist above, surface risky ones)
+   - `summary.likelyStuckReason` became non-null (newly stuck)
+   - `summary.needsAttentionScore` crossed 60 in this window
+4. Aggregate transitions into a short report. One line per agent, leading with `summary.oneLine` and the transition verb (e.g. `"feat-auth completed — tests passing"`, `"feat-billing newly blocked on Bash permission for rm"`).
+
+**No-op condition:** if the scan finds zero agents whose state file was touched since `since`, OR every touched agent's signals are unchanged from what the previous tick would have observed (same status, same `pendingQuestion`, same `likelyStuckReason`, same attention bracket), return exactly the literal string `no-op` and nothing else. The dispatcher will suppress it.
+
+Do not run `fswatch`, do not re-parse raw log files, and do not emit the rich per-event narratives from the "Event Reactions" section above — those are for interactive, `fswatch`-driven reactions on a normal user turn. The heartbeat invocation is a deliberately thinner digest.

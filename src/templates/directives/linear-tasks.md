@@ -1,3 +1,11 @@
+---
+heartbeat:
+  cadence: 30m
+  output: silent-on-noop
+  since_param: true
+  only_if_quiet: false
+---
+
 ## Linear Task Management
 
 *Requires: [linear-mcp](https://github.com/jerhadf/linear-mcp) installed as an MCP server*
@@ -23,3 +31,21 @@ Use /loop 10m to set up the recurring check.
 ### Hand-off to Linear Deadline Tracker
 
 This directive focuses on *visibility and prioritization* of Linear tickets. For deadline and commitment tracking — what's due today, what's overdue, what ad-hoc promises you've made — use the `linear-deadline-tracker` directive alongside this one. That directive owns `.orra/memory/commitments.md`; this directive does not write to that file.
+
+## Heartbeat invocation
+
+When the dispatcher wakes this directive with `since=<timestamp>`, do NOT re-run the full "assigned to me, grouped by project and status" sweep from the normal invocation. Run a cheap `updatedAt`-filtered query instead. (The `/loop 10m` mentioned in the normal invocation is superseded by the heartbeat for heartbeat-armed sessions — do not start your own loop.)
+
+1. Query Linear for tickets assigned to the user where `updatedAt > since`. In the Linear MCP, this looks like an `issues` query with a filter `{ assignee: { isMe: true }, updatedAt: { gt: "<since>" } }`. Keep the field set small — `id`, `identifier`, `title`, `state.name`, `updatedAt`, `priority`, `comments.nodes[last]` is enough.
+
+2. For each returned ticket, classify the change. Surface only transitions that happened since `since`:
+   - **New assignment:** ticket was assigned to the user in this window (i.e. `updatedAt > since` and this ticket was not in the previous tick's known-set, or its assignee changed to the user).
+   - **Status change by someone else:** `state.name` changed and the most recent `history` entry shows an actor that is not the user. The user moving their own tickets should stay silent.
+   - **New comment on a ticket the user owns:** `comments.nodes[last].createdAt > since` AND the commenter is not the user.
+   - **Priority bumped:** `priority` changed in this window, especially to Urgent or High.
+
+3. Format each transition as one line, leading with the Linear identifier: `AUTH-142 reassigned to you`, `BILLING-87 moved In Review → Done by @alice`, `PLAT-12 new comment from @bob`. Aggregate into a short bullet list.
+
+**No-op condition:** if the `updatedAt > since` query returns zero tickets, OR every returned ticket's only change is the user themselves editing the ticket (no external activity worth surfacing), return exactly the literal string `no-op` and nothing else.
+
+Do not re-emit the full prioritization report here — that's the normal-invocation job, and it's too long to fire every 30 minutes. Heartbeat ticks are deltas only.

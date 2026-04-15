@@ -1,3 +1,11 @@
+---
+heartbeat:
+  cadence: 5m
+  output: silent-on-noop
+  since_param: true
+  only_if_quiet: false
+---
+
 ## Auto Remediator
 
 Spot routine maintenance work in `orra_scan` and delegate it to headless background agents — let the user focus on high-value work while side-quest tasks (rebases, lint fixes, snapshot updates) get handled automatically.
@@ -76,3 +84,29 @@ Don't keep mentioning completed agents on every scan — surface once, then let 
 
 - **monitor-agents** — handles event-driven reactions; `auto-remediator` handles scheduled remediation. They're complementary, not redundant.
 - **morning-briefing** — when you spot work the user should know about, defer mentioning it until they're already engaged with their daily focus.
+
+## Heartbeat invocation
+
+**Critical:** when woken by the heartbeat, this directive is in **suggest-only** mode. It does NOT call `orra_spawn` — even for allowlisted patterns. The allowlist's "auto-spawn without asking" behavior is only valid on real user turns where the user is around to see the one-line aside. On a heartbeat tick, surface candidates as offers and wait for the next user turn.
+
+When the dispatcher wakes this directive with `since=<timestamp>`:
+
+1. Call `orra_scan`. Walk the result and match each worktree against the allowlist patterns above (`rebase-on-main`, `fix-lint`, `fix-typecheck`, `regenerate-lockfile`) exactly as in the normal invocation.
+
+2. Filter to **newly-eligible** candidates — worktrees where the remediation opportunity *became available* since `since`. Specifically:
+   - **rebase-on-main:** the worktree crossed the `git.behind > 5` threshold in this window (you can tell because either the underlying branch advanced since `since`, or the worktree was previously rebased and has drifted again), AND the worktree's latest activity on disk is older than `since` (i.e. it's been sitting idle). Do not re-flag a worktree that's been rebaseable for hours.
+   - **fix-lint / fix-typecheck:** the agent's `summary.lastTestResult` or `summary.tailLines` gained the lint/type error signature in this window — meaning a log file or state file under `.orra/agents/` has `mtime > since` AND the latest tail lines show the error.
+   - **regenerate-lockfile:** the lockfile drift appeared since `since` (check the worktree's most recent commit timestamp or `git diff` mtime).
+   - **Stale lock files** (e.g. `.git/index.lock` older than 10 minutes on a worktree with no active agent) where the lock's `mtime < since` but the worktree is still listed as blocked — newly surfaceable because the previous tick would have waited for the lock to resolve on its own.
+
+3. Filter out anything that's already been offered or spawned this session. If `orra_scan` shows a running `headless-spawn` agent for the same worktree + pattern, skip it.
+
+4. For each surviving candidate, emit one line framed as a **suggestion**, not an action:
+   > `feat-payments is 12 commits behind main and idle — want me to spawn a rebase agent?`
+   > `feat-billing has fresh lint errors from the last test run — spawn an auto-fix agent?`
+
+   Keep it short. Include the trigger reason so the user can decide without clicking.
+
+**No-op condition:** if no new allowlist candidates became eligible since `since`, OR every candidate was already offered/spawned in a previous tick, return exactly the literal string `no-op` and nothing else. Silence is the normal case.
+
+Never call `orra_spawn` from a heartbeat tick. Never run the full allowlist sweep here. Only the `since`-windowed diff.
