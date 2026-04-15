@@ -4,3 +4,7 @@ dist/
 .orra/
 worktrees/
 .claude/settings.local.json
+
+# Internal planning artifacts — the Superpowers skill writes here
+# locally, but we don't ship these design docs in the public repo.
+docs/superpowers/
