@@ -144,6 +144,76 @@
         </div>
       </div>
     </section>
+
+    <!-- DIRECTIVES (extensibility) -->
+    <section class="directives-section">
+      <div class="label-eyebrow">How it composes</div>
+      <h2 class="section-title">Connect any MCP. <em>Make it proactive.</em></h2>
+      <p class="section-lede">A directive is just a markdown file. If you have an MCP installed (Linear, Slack, Sentry, Jira, your own), write a directive that calls its tools — declare the lane and the cadence, drop it in <code style="color:var(--amber);">.orra/directives/</code>, and the heartbeat does the rest. No code, no plugin API.</p>
+
+      <div class="directives-grid">
+        <div class="directives-col">
+          <h4>Ten ship in the box</h4>
+          <div class="chips">
+            <span class="chip">morning-briefing</span>
+            <span class="chip">shutdown-ritual</span>
+            <span class="chip">memory-recall</span>
+            <span class="chip">linear-tasks</span>
+            <span class="chip">linear-deadline-tracker</span>
+            <span class="chip">pr-shepherd</span>
+            <span class="chip">stale-cleanup</span>
+            <span class="chip">monitor-agents</span>
+            <span class="chip">auto-remediator</span>
+            <span class="chip">wait-time-recycler</span>
+          </div>
+        </div>
+        <div class="directives-col">
+          <h4>Or write your own</h4>
+          <div class="chips">
+            <span class="chip custom">sentry-on-call</span>
+            <span class="chip custom">slack-mentions-since-9am</span>
+            <span class="chip custom">deploy-window-watcher</span>
+            <span class="chip custom">jira-blocked-tickets</span>
+            <span class="chip custom">datadog-alert-triage</span>
+            <span class="chip custom">notion-meeting-notes</span>
+            <span class="chip custom">pagerduty-handoff</span>
+          </div>
+          <p class="req-note">— illustrative examples; you supply the matching MCP.</p>
+        </div>
+      </div>
+
+      <pre class="directive-snippet"><span class="comment">--- a directive is just markdown with frontmatter ---</span>
+<span class="head">---</span>
+<span class="key">name:</span> <span class="str">sentry-on-call</span>
+<span class="key">cadence:</span> <span class="str">5m</span>
+<span class="key">lane:</span> <span class="str">incident-watch</span>
+<span class="key">memory:</span>
+  <span class="key">read:</span> [<span class="str">on-call-rotation.md</span>]
+  <span class="key">write:</span> [<span class="str">incidents/YYYY-MM-DD.md</span>]
+<span class="head">---</span>
+
+<span class="head">### My Lane</span>
+On every heartbeat tick, check the Sentry MCP for new high-priority
+issues assigned to whoever's on call. Surface anything new, summarize
+the stack trace, suggest spawning an investigation agent if it looks
+fixable.</pre>
+    </section>
+
+    <!-- FOOTER CTA -->
+    <section class="footer-cta">
+      <h2>Take control of your worktree chaos.</h2>
+      <p class="footer-sub">Free, MIT-licensed, runs locally. Two minutes from <code style="color:var(--amber);">npm install</code> to your first morning briefing.</p>
+      <div class="install-line"><span class="dollar">$</span>npm install -g orra-mcp</div>
+      <div>
+        <a href="https://github.com/bjornj12/Orra-mcp" class="btn-primary">★ Star on GitHub</a>
+      </div>
+      <div class="footer-links">
+        <a href="https://github.com/bjornj12/Orra-mcp">GitHub</a>
+        <a href="https://www.npmjs.com/package/orra-mcp">npm</a>
+        <a href="https://github.com/bjornj12/Orra-mcp#readme">Docs</a>
+        <a href="https://github.com/bjornj12/Orra-mcp/blob/main/LICENSE">MIT License</a>
+      </div>
+    </section>
   </main>
 </body>
 </html>

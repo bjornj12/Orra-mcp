@@ -252,3 +252,75 @@ h2.section-title em { font-style: italic; color: var(--amber); }
 }
 .alive-prose:last-child { margin-bottom: 0; }
 .alive-prose em { color: var(--cream); font-style: italic; }
+
+/* ===== DIRECTIVES (extensibility) ===== */
+.directives-section .section-lede { margin-bottom: 36px; }
+.directives-grid {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 56px;
+  margin-top: 16px;
+}
+.directives-col h4 {
+  font-size: 11px; letter-spacing: 0.15em; text-transform: uppercase;
+  color: var(--amber); opacity: 0.85; margin-bottom: 18px;
+  font-weight: 500;
+}
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip {
+  padding: 6px 12px;
+  border: 1px solid rgba(251,191,36,0.4);
+  border-radius: 999px;
+  font-size: 12px; color: var(--cream);
+  font-family: 'SF Mono', Menlo, monospace;
+  background: rgba(251,191,36,0.05);
+}
+.chip.custom {
+  border-color: rgba(163,230,53,0.4);
+  background: rgba(163,230,53,0.05);
+  color: #ecfccb;
+}
+.req-note {
+  margin-top: 14px; font-size: 12px; color: var(--gray-dim); font-style: italic;
+}
+
+.directive-snippet {
+  margin-top: 28px;
+  background: rgba(0,0,0,0.4);
+  border: 1px solid rgba(251,191,36,0.2); border-radius: 6px;
+  padding: 16px 18px;
+  font-family: 'SF Mono', Menlo, monospace; font-size: 12px;
+  line-height: 1.7; color: var(--gray);
+  overflow-x: auto;
+  white-space: pre;
+}
+.directive-snippet .key { color: var(--amber); }
+.directive-snippet .str { color: var(--green); }
+.directive-snippet .comment { color: var(--gray-dim); font-style: italic; }
+.directive-snippet .head { color: var(--cream); }
+
+/* ===== FOOTER CTA ===== */
+.footer-cta {
+  text-align: center; padding: 120px 32px 80px;
+  border-top: 1px solid rgba(251,191,36,0.15); margin-top: 60px;
+}
+.footer-cta h2 {
+  font-family: var(--serif); font-weight: 400;
+  font-size: clamp(32px, 4.5vw, 50px); color: var(--cream);
+  margin-bottom: 24px; line-height: 1.1;
+}
+.footer-sub {
+  color: var(--gray); max-width: 520px; margin: 0 auto;
+}
+.install-line {
+  display: inline-block; padding: 13px 20px;
+  background: rgba(0,0,0,0.4); border: 1px solid rgba(251,191,36,0.25);
+  border-radius: 4px;
+  font-family: 'SF Mono', Menlo, monospace; color: var(--cream);
+  font-size: 14px; margin: 28px 0 36px;
+}
+.install-line .dollar { color: var(--gray-dim); margin-right: 10px; }
+.footer-links {
+  margin-top: 44px; display: flex; gap: 28px; justify-content: center;
+  font-size: 13px; color: var(--gray-dim);
+}
+.footer-links a { color: var(--gray-dim); text-decoration: none; border-bottom: 1px solid transparent; }
+.footer-links a:hover { color: var(--cream); border-color: var(--cream); }
