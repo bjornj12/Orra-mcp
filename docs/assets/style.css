@@ -73,3 +73,34 @@ h2.section-title em { font-style: italic; color: var(--amber); }
 .section-lede {
   font-size: 17px; color: var(--gray); max-width: 680px; line-height: 1.55;
 }
+
+/* ===== HERO ===== */
+.hero { padding-top: 80px; padding-bottom: 60px; }
+.eyebrow {
+  font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase;
+  color: var(--amber); opacity: 0.9; margin-bottom: 20px;
+}
+.hero h1 {
+  font-family: var(--serif); font-weight: 400;
+  font-size: clamp(36px, 5.5vw, 64px); line-height: 1.05;
+  letter-spacing: -0.02em; color: var(--cream); margin-bottom: 24px;
+  max-width: 880px;
+}
+.hero h1 em { font-style: italic; color: var(--amber); }
+.hero .lede {
+  font-size: clamp(16px, 1.4vw, 19px); max-width: 680px;
+  color: var(--gray); margin-bottom: 32px; line-height: 1.5;
+}
+.cta-row { display: flex; gap: 14px; align-items: center; flex-wrap: wrap; }
+.btn-primary {
+  background: var(--amber); color: #1c1917;
+  padding: 13px 22px; border-radius: 4px;
+  font-weight: 600; text-decoration: none; font-size: 14px;
+  transition: transform 0.15s, background 0.15s;
+}
+.btn-primary:hover { transform: translateY(-1px); background: #fcd34d; }
+.btn-secondary {
+  color: var(--gray); padding: 13px 8px; text-decoration: none; font-size: 14px;
+  border-bottom: 1px solid rgba(203,213,225,0.3);
+}
+.btn-secondary:hover { color: var(--cream); border-color: var(--cream); }
