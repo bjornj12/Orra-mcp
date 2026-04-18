@@ -9,3 +9,4 @@ worktrees/
 # locally, but we don't ship these design docs in the public repo.
 docs/superpowers/
 docs/specs/
+.superpowers/
