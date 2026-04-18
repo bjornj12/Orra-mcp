@@ -19,6 +19,49 @@
         <a href="#transmission" class="btn-secondary">See it in action ↓</a>
       </div>
     </section>
+
+    <!-- TRANSMISSION -->
+    <section class="transmission-section" id="transmission">
+      <div class="transmission-eyebrow">— a morning, with Orra —</div>
+      <h2 class="transmission-title">You open Claude Code. <em>This</em> is what happens.</h2>
+      <div class="transmission-frame">
+        <div class="tx-titlebar">
+          <span class="tx-dot" style="background:#ff5f57;"></span>
+          <span class="tx-dot" style="background:#febc2e;"></span>
+          <span class="tx-dot" style="background:#28c840;"></span>
+          <span class="tx-titlebar-label">claude — orra ▸ morning briefing · 2026-04-18 09:14</span>
+        </div>
+        <div class="tx-body">
+          <div class="tx-line"><span class="tx-prompt-orra">orra ▸</span> Morning. Yesterday's first move was: <span class="tx-emphasis">pick back up on JWT refresh.</span></div>
+          <div class="tx-line">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Today's situation:</div>
+          <div class="tx-bullet">• Due today: <span class="tx-status-progress">AUTH-142</span> &nbsp;<span style="color:var(--gray-dim);">— in_progress, worktree <code style="color:var(--cream)">auth-refactor</code></span></div>
+          <div class="tx-bullet">• Ready to land: <span class="tx-status-ready">billing-fix</span> &nbsp;<span style="color:var(--gray-dim);">— PR approved, mergeable</span></div>
+          <div class="tx-bullet">• Needs attention: <span class="tx-status-blocked">onboarding</span> &nbsp;<span style="color:var(--gray-dim);">— waiting on a permission prompt</span></div>
+          <hr class="tx-divider">
+          <div class="tx-line"><span class="tx-prompt-orra">orra ▸</span> <span style="color:var(--gray-dim);">New since yesterday:</span></div>
+          <div class="tx-line">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="tx-status-blocked">JIRA-AUTH-198</span> was assigned to you, due <span class="tx-emphasis">end of day today</span>.</div>
+          <div class="tx-line">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="tx-meta">Reading the ticket... reproducer included, scoped to the auth middleware —</span></div>
+          <div class="tx-line">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="tx-meta">looks like a bugfix, ~30min if the repro holds.</span></div>
+          <div class="tx-spacer"></div>
+          <div class="tx-callout">
+            Want me to <span class="tx-prompt-orra">spawn a background agent</span> to investigate
+            and report back while you focus on AUTH-142?<br>
+            &nbsp;&nbsp;· pull a fresh worktree from main<br>
+            &nbsp;&nbsp;· run the reproducer<br>
+            &nbsp;&nbsp;· trace the failure<br>
+            &nbsp;&nbsp;· post findings to <code style="color:var(--cream)">.orra/memory/notes/AUTH-198.md</code>
+          </div>
+          <div class="tx-spacer"></div>
+          <div class="tx-line"><span class="tx-prompt-you">you ▸</span> <span class="tx-emphasis">yes, spawn it. focus is JWT, ship by 4pm.</span></div>
+          <div class="tx-spacer"></div>
+          <div class="tx-line"><span class="tx-prompt-orra">orra ▸</span> Spawned <code style="color:var(--cream)">agent_3xj</code>, running detached.</div>
+          <div class="tx-line">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="tx-meta">Arming the heartbeat: <code style="color:var(--cream)">/loop 5m heartbeat tick</code></span></div>
+          <div class="tx-line">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="tx-meta">I'll surface its findings — and any other state changes — every 5 min.</span></div>
+          <div class="tx-line">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="tx-meta">For now: aligning all suggestions to your 4pm JWT ship.</span></div>
+          <div class="tx-line">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="tx-emphasis">Ready when you are.</span> ▎</div>
+        </div>
+      </div>
+    </section>
   </main>
 </body>
 </html>

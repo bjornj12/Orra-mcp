@@ -104,3 +104,63 @@ h2.section-title em { font-style: italic; color: var(--amber); }
   border-bottom: 1px solid rgba(203,213,225,0.3);
 }
 .btn-secondary:hover { color: var(--cream); border-color: var(--cream); }
+
+/* ===== TRANSMISSION (centerpiece) ===== */
+.transmission-section { padding: 80px 32px 140px; position: relative; }
+.transmission-section::before {
+  content: ''; position: absolute; inset: 0;
+  background: radial-gradient(ellipse at center, rgba(251,191,36,0.04) 0%, transparent 60%);
+  pointer-events: none;
+}
+.transmission-eyebrow {
+  text-align: center; font-size: 11px; letter-spacing: 0.2em;
+  text-transform: uppercase; color: var(--amber); opacity: 0.8;
+  margin-bottom: 18px;
+}
+.transmission-title {
+  text-align: center; font-family: var(--serif); font-weight: 400;
+  font-size: clamp(28px, 4vw, 44px); line-height: 1.15;
+  color: var(--cream); margin-bottom: 56px; letter-spacing: -0.015em;
+}
+.transmission-title em { font-style: italic; color: var(--amber); }
+.transmission-frame {
+  margin: 0 auto; max-width: 920px; position: relative;
+  background: linear-gradient(180deg, rgba(15,23,42,0.85) 0%, rgba(0,0,0,0.6) 100%);
+  border: 1px solid rgba(251,191,36,0.3); border-radius: 10px;
+  box-shadow: 0 30px 80px -20px rgba(0,0,0,0.5), 0 0 0 1px rgba(251,191,36,0.05);
+  overflow: hidden;
+}
+.tx-titlebar {
+  display: flex; align-items: center; gap: 10px; padding: 14px 18px;
+  background: rgba(0,0,0,0.4); border-bottom: 1px solid rgba(251,191,36,0.15);
+}
+.tx-dot { width: 11px; height: 11px; border-radius: 50%; }
+.tx-titlebar-label {
+  margin-left: auto; font-size: 11px; letter-spacing: 0.12em;
+  color: var(--gray-dim); text-transform: uppercase;
+  font-family: 'SF Mono', Menlo, monospace;
+}
+.tx-body {
+  padding: 32px 40px;
+  font-family: 'SF Mono', Menlo, monospace;
+  font-size: 14px; line-height: 1.85; color: var(--gray);
+}
+.tx-line { color: var(--gray); }
+.tx-prompt-orra { color: var(--amber); font-weight: 600; }
+.tx-prompt-you { color: var(--gray-dim); }
+.tx-status-ready { color: var(--green); }
+.tx-status-progress { color: var(--amber); }
+.tx-status-blocked { color: var(--red); }
+.tx-meta { color: var(--gray); }
+.tx-emphasis { color: var(--cream); }
+.tx-spacer { height: 14px; }
+.tx-divider {
+  margin: 18px 0; border: 0;
+  border-top: 1px dashed rgba(251,191,36,0.15);
+}
+.tx-callout {
+  color: var(--cream); background: rgba(251,191,36,0.08);
+  border-left: 2px solid var(--amber);
+  padding: 8px 14px; margin: 8px 0;
+}
+.tx-bullet { padding-left: 24px; color: var(--gray); }
