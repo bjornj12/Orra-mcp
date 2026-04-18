@@ -34,7 +34,7 @@
         <div class="tx-body">
           <div class="tx-line"><span class="tx-prompt-orra">orra ▸</span> Morning. Yesterday's first move was: <span class="tx-emphasis">pick back up on JWT refresh.</span></div>
           <div class="tx-line">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Today's situation:</div>
-          <div class="tx-bullet">• Due today: <span class="tx-status-progress">AUTH-142</span> &nbsp;<span style="color:var(--gray-dim);">— in_progress, worktree <code style="color:var(--cream)">auth-refactor</code></span></div>
+          <div class="tx-bullet">• Due today: <span class="tx-status-progress">AUTH-142</span> &nbsp;<span style="color:var(--gray-dim);">— in_progress, worktree <code>auth-refactor</code></span></div>
           <div class="tx-bullet">• Ready to land: <span class="tx-status-ready">billing-fix</span> &nbsp;<span style="color:var(--gray-dim);">— PR approved, mergeable</span></div>
           <div class="tx-bullet">• Needs attention: <span class="tx-status-blocked">onboarding</span> &nbsp;<span style="color:var(--gray-dim);">— waiting on a permission prompt</span></div>
           <hr class="tx-divider">
@@ -49,13 +49,13 @@
             &nbsp;&nbsp;· pull a fresh worktree from main<br>
             &nbsp;&nbsp;· run the reproducer<br>
             &nbsp;&nbsp;· trace the failure<br>
-            &nbsp;&nbsp;· post findings to <code style="color:var(--cream)">.orra/memory/notes/AUTH-198.md</code>
+            &nbsp;&nbsp;· post findings to <code>.orra/memory/notes/AUTH-198.md</code>
           </div>
           <div class="tx-spacer"></div>
           <div class="tx-line"><span class="tx-prompt-you">you ▸</span> <span class="tx-emphasis">yes, spawn it. focus is JWT, ship by 4pm.</span></div>
           <div class="tx-spacer"></div>
-          <div class="tx-line"><span class="tx-prompt-orra">orra ▸</span> Spawned <code style="color:var(--cream)">agent_3xj</code>, running detached.</div>
-          <div class="tx-line">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="tx-meta">Arming the heartbeat: <code style="color:var(--cream)">/loop 5m heartbeat tick</code></span></div>
+          <div class="tx-line"><span class="tx-prompt-orra">orra ▸</span> Spawned <code>agent_3xj</code>, running detached.</div>
+          <div class="tx-line">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="tx-meta">Arming the heartbeat: <code>/loop 5m heartbeat tick</code></span></div>
           <div class="tx-line">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="tx-meta">I'll surface its findings — and any other state changes — every 5 min.</span></div>
           <div class="tx-line">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="tx-meta">For now: aligning all suggestions to your 4pm JWT ship.</span></div>
           <div class="tx-line">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="tx-emphasis">Ready when you are.</span> ▎</div>
@@ -67,9 +67,9 @@
     <section>
       <div class="label-eyebrow">The problem</div>
       <p class="problem-quote">
-        "Five worktrees, three blocked agents, two stale rebases, a Jira ticket
+        &ldquo;Five worktrees, three blocked agents, two stale rebases, a Jira ticket
         I just got assigned, and a PR waiting on a review I forgot about.
-        The coding part isn't the bottleneck anymore."
+        The coding part isn&rsquo;t the bottleneck anymore.&rdquo;
       </p>
       <p class="problem-attribution">— anyone running more than one Claude Code session at a time</p>
     </section>
@@ -80,17 +80,17 @@
       <h2 class="section-title">Three things, all <em>in service of focus</em>.</h2>
       <div class="caps">
         <div class="cap">
-          <svg class="cap-icon" viewBox="0 0 48 48"><circle cx="24" cy="24" r="3" fill="#fbbf24"/><circle cx="10" cy="14" r="2" fill="#a3e635"/><circle cx="38" cy="16" r="2" fill="#fbbf24"/><circle cx="14" cy="36" r="2" fill="#f87171"/><circle cx="36" cy="34" r="2" fill="#a3e635"/><line x1="24" y1="24" x2="10" y2="14" stroke="#fbbf24" stroke-width="0.5" opacity="0.4"/><line x1="24" y1="24" x2="38" y2="16" stroke="#fbbf24" stroke-width="0.5" opacity="0.4"/><line x1="24" y1="24" x2="14" y2="36" stroke="#fbbf24" stroke-width="0.5" opacity="0.4"/><line x1="24" y1="24" x2="36" y2="34" stroke="#fbbf24" stroke-width="0.5" opacity="0.4"/></svg>
+          <svg class="cap-icon" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="3" fill="#fbbf24"/><circle cx="10" cy="14" r="2" fill="#a3e635"/><circle cx="38" cy="16" r="2" fill="#fbbf24"/><circle cx="14" cy="36" r="2" fill="#f87171"/><circle cx="36" cy="34" r="2" fill="#a3e635"/><line x1="24" y1="24" x2="10" y2="14" stroke="#fbbf24" stroke-width="0.5" opacity="0.4"/><line x1="24" y1="24" x2="38" y2="16" stroke="#fbbf24" stroke-width="0.5" opacity="0.4"/><line x1="24" y1="24" x2="14" y2="36" stroke="#fbbf24" stroke-width="0.5" opacity="0.4"/><line x1="24" y1="24" x2="36" y2="34" stroke="#fbbf24" stroke-width="0.5" opacity="0.4"/></svg>
           <h3>Awareness</h3>
           <p>Scans every worktree, ticket, and agent in one pass. Classifies status, surfaces what's due, and pre-computes summaries — so the briefing is composed before you finish typing.</p>
         </div>
         <div class="cap">
-          <svg class="cap-icon" viewBox="0 0 48 48"><path d="M 8 12 L 8 36 L 40 36" stroke="#fbbf24" stroke-width="1" fill="none"/><circle cx="14" cy="28" r="1.5" fill="#fef3c7"/><circle cx="22" cy="22" r="1.5" fill="#fef3c7"/><circle cx="30" cy="18" r="1.5" fill="#fef3c7"/><circle cx="38" cy="14" r="2" fill="#fbbf24"/></svg>
+          <svg class="cap-icon" viewBox="0 0 48 48" aria-hidden="true"><path d="M 8 12 L 8 36 L 40 36" stroke="#fbbf24" stroke-width="1" fill="none"/><circle cx="14" cy="28" r="1.5" fill="#fef3c7"/><circle cx="22" cy="22" r="1.5" fill="#fef3c7"/><circle cx="30" cy="18" r="1.5" fill="#fef3c7"/><circle cx="38" cy="14" r="2" fill="#fbbf24"/></svg>
           <h3>Learning</h3>
           <p>A markdown memory layer. Daily notes, commitments, per-worktree context — all persisted across sessions, all grep-friendly. Yesterday's first move shows up in today's briefing.</p>
         </div>
         <div class="cap">
-          <svg class="cap-icon" viewBox="0 0 48 48"><circle cx="14" cy="14" r="2" fill="#a3e635"/><circle cx="34" cy="14" r="2" fill="#fbbf24"/><circle cx="14" cy="34" r="2" fill="#fbbf24"/><circle cx="34" cy="34" r="2" fill="#a3e635"/><circle cx="24" cy="24" r="3" fill="#fbbf24"/><circle cx="24" cy="24" r="8" fill="none" stroke="#fbbf24" stroke-width="0.5" opacity="0.4"/></svg>
+          <svg class="cap-icon" viewBox="0 0 48 48" aria-hidden="true"><circle cx="14" cy="14" r="2" fill="#a3e635"/><circle cx="34" cy="14" r="2" fill="#fbbf24"/><circle cx="14" cy="34" r="2" fill="#fbbf24"/><circle cx="34" cy="34" r="2" fill="#a3e635"/><circle cx="24" cy="24" r="3" fill="#fbbf24"/><circle cx="24" cy="24" r="8" fill="none" stroke="#fbbf24" stroke-width="0.5" opacity="0.4"/></svg>
           <h3>Side tasks</h3>
           <p>Spawn detached <code style="color:#fbbf24;font-size:13px;">claude --print</code> agents for routine work — bug investigations, rebases, lint fixes. They run in the background; Orra surfaces their state on the next scan.</p>
         </div>
@@ -178,11 +178,11 @@
             <span class="chip custom">notion-meeting-notes</span>
             <span class="chip custom">pagerduty-handoff</span>
           </div>
-          <p class="req-note">— illustrative examples; you supply the matching MCP.</p>
+          <p class="fine-print">— illustrative examples; you supply the matching MCP.</p>
         </div>
       </div>
 
-      <pre class="directive-snippet"><span class="comment">--- a directive is just markdown with frontmatter ---</span>
+      <pre class="directive-snippet"><code><span class="comment">--- a directive is just markdown with frontmatter ---</span>
 <span class="head">---</span>
 <span class="key">name:</span> <span class="str">sentry-on-call</span>
 <span class="key">cadence:</span> <span class="str">5m</span>
@@ -196,7 +196,7 @@
 On every heartbeat tick, check the Sentry MCP for new high-priority
 issues assigned to whoever's on call. Surface anything new, summarize
 the stack trace, suggest spawning an investigation agent if it looks
-fixable.</pre>
+fixable.</code></pre>
     </section>
 
     <!-- FOOTER CTA -->
