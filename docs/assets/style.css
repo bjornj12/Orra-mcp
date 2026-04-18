@@ -214,6 +214,7 @@ h2.section-title em { font-style: italic; color: var(--amber); }
 .arm-caption {
   color: var(--gray-dim); font-size: 13px; max-width: 600px;
 }
+.arm-caption code { color: var(--cream); font-family: 'SF Mono', Menlo, monospace; }
 
 .alive-grid {
   display: grid; grid-template-columns: 1fr 1.3fr; gap: 64px;
