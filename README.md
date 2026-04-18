@@ -169,6 +169,10 @@ npm test
 
 See **[CONTRIBUTING.md](CONTRIBUTING.md)** for contribution guidelines.
 
+## Bugs and feature requests
+
+Please [open an issue](https://github.com/bjornj12/Orra-mcp/issues/new/choose) — the templates will guide you through what to include. For security vulnerabilities, see [SECURITY.md](SECURITY.md) instead.
+
 ## Further reading
 
 - [docs/directives.md](docs/directives.md) — writing and composing directives

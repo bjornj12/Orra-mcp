@@ -36,7 +36,9 @@ See [docs/architecture.md](docs/architecture.md) for the full source layout. In 
 
 ## Filing issues
 
-Use the issue templates. For bugs, please include:
+[Open an issue on GitHub](https://github.com/bjornj12/Orra-mcp/issues/new/choose) for any bug or feature request — the templates will guide you. For security vulnerabilities, see [SECURITY.md](SECURITY.md) instead of filing a public issue.
+
+For bugs, please include:
 
 - Repro steps
 - Expected vs actual behavior

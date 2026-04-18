@@ -6,6 +6,18 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
 
+### Added
+
+- `SECURITY.md` with vulnerability disclosure policy.
+- GitHub Actions CI workflow running build + tests on Node 20 and 22.
+- `author` field in `package.json`.
+- README + CONTRIBUTING now point to GitHub issues for bug/feature reports.
+
+### Changed
+
+- Updated `@types/node`, `typescript`, `vitest` to latest patch versions.
+- Refreshed transitive dependencies; `npm audit` reports 0 vulnerabilities.
+
 ## [0.1.0] — 2026-04-14
 
 Initial open-source release.
