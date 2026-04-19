@@ -29,12 +29,26 @@ cd "$SCRATCH"
 npm init -y >/dev/null
 npm install --silent "$TARBALL"
 
-echo "==> import check"
-node --input-type=module -e "
-  const mod = await import('orra-mcp');
-  if (!mod) throw new Error('module did not load');
-  console.log('IMPORT OK');
-"
+echo "==> boot check (start server, wait for marker, kill)"
+BOOT_LOG="$SCRATCH/boot.log"
+node --input-type=module -e "await import('orra-mcp')" >"$BOOT_LOG" 2>&1 </dev/null &
+BOOT_PID=$!
+for _ in 1 2 3 4 5 6 7 8 9 10; do
+  sleep 0.5
+  if grep -q "orra-mcp: running" "$BOOT_LOG" 2>/dev/null; then
+    break
+  fi
+done
+kill "$BOOT_PID" 2>/dev/null || true
+wait "$BOOT_PID" 2>/dev/null || true
+if grep -q "orra-mcp: running" "$BOOT_LOG"; then
+  echo "  server booted ✓"
+else
+  echo "  FAIL: server did not print boot marker within 5s"
+  echo "  --- boot log ---"
+  cat "$BOOT_LOG"
+  exit 1
+fi
 
 echo "==> binaries present"
 test -x ./node_modules/.bin/orra-mcp && echo "  orra-mcp ✓"
