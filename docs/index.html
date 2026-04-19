@@ -1,0 +1,219 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Orra is an MCP server that turns Claude Code into a multi-agent orchestrator. It tracks worktrees, learns with you, and runs background agents on routine maintenance.">
+  <title>Orra · An orchestrator for the Claude Code era.</title>
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <main>
+    <!-- HERO -->
+    <section class="hero">
+      <div class="eyebrow">Orra · MCP for Claude Code</div>
+      <h1>An <em>orchestrator</em> for the Claude Code era.</h1>
+      <p class="lede">Multi-worktree development is a coordination problem, not a coding problem. Orra composes a briefing the moment you open Claude — and once armed, keeps checking the work in the background while you focus on yours.</p>
+      <div class="cta-row">
+        <a href="https://github.com/bjornj12/Orra-mcp" class="btn-primary">★ Star on GitHub</a>
+        <a href="#transmission" class="btn-secondary">See it in action ↓</a>
+      </div>
+    </section>
+
+    <!-- TRANSMISSION -->
+    <section class="transmission-section" id="transmission">
+      <div class="transmission-eyebrow">— a morning, with Orra —</div>
+      <h2 class="transmission-title">You open Claude Code. <em>This</em> is what happens.</h2>
+      <div class="transmission-frame">
+        <div class="tx-titlebar">
+          <span class="tx-dot" style="background:#ff5f57;"></span>
+          <span class="tx-dot" style="background:#febc2e;"></span>
+          <span class="tx-dot" style="background:#28c840;"></span>
+          <span class="tx-titlebar-label">claude — orra ▸ morning briefing · 2026-04-18 09:14</span>
+        </div>
+        <div class="tx-body">
+          <div class="tx-line"><span class="tx-prompt-orra">orra ▸</span> Morning. Yesterday's first move was: <span class="tx-emphasis">pick back up on JWT refresh.</span></div>
+          <div class="tx-line">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Today's situation:</div>
+          <div class="tx-bullet">• Due today: <span class="tx-status-progress">AUTH-142</span> &nbsp;<span style="color:var(--gray-dim);">— in_progress, worktree <code>auth-refactor</code></span></div>
+          <div class="tx-bullet">• Ready to land: <span class="tx-status-ready">billing-fix</span> &nbsp;<span style="color:var(--gray-dim);">— PR approved, mergeable</span></div>
+          <div class="tx-bullet">• Needs attention: <span class="tx-status-blocked">onboarding</span> &nbsp;<span style="color:var(--gray-dim);">— waiting on a permission prompt</span></div>
+          <hr class="tx-divider">
+          <div class="tx-line"><span class="tx-prompt-orra">orra ▸</span> <span style="color:var(--gray-dim);">New since yesterday:</span></div>
+          <div class="tx-line">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="tx-status-blocked">JIRA-AUTH-198</span> was assigned to you, due <span class="tx-emphasis">end of day today</span>.</div>
+          <div class="tx-line">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="tx-meta">Reading the ticket... reproducer included, scoped to the auth middleware —</span></div>
+          <div class="tx-line">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="tx-meta">looks like a bugfix, ~30min if the repro holds.</span></div>
+          <div class="tx-spacer"></div>
+          <div class="tx-callout">
+            Want me to <span class="tx-prompt-orra">spawn a background agent</span> to investigate
+            and report back while you focus on AUTH-142?<br>
+            &nbsp;&nbsp;· pull a fresh worktree from main<br>
+            &nbsp;&nbsp;· run the reproducer<br>
+            &nbsp;&nbsp;· trace the failure<br>
+            &nbsp;&nbsp;· post findings to <code>.orra/memory/notes/AUTH-198.md</code>
+          </div>
+          <div class="tx-spacer"></div>
+          <div class="tx-line"><span class="tx-prompt-you">you ▸</span> <span class="tx-emphasis">yes, spawn it. focus is JWT, ship by 4pm.</span></div>
+          <div class="tx-spacer"></div>
+          <div class="tx-line"><span class="tx-prompt-orra">orra ▸</span> Spawned <code>agent_3xj</code>, running detached.</div>
+          <div class="tx-line">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="tx-meta">Arming the heartbeat: <code>/loop 5m heartbeat tick</code></span></div>
+          <div class="tx-line">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="tx-meta">I'll surface its findings — and any other state changes — every 5 min.</span></div>
+          <div class="tx-line">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="tx-meta">For now: aligning all suggestions to your 4pm JWT ship.</span></div>
+          <div class="tx-line">&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;<span class="tx-emphasis">Ready when you are.</span> ▎</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- PROBLEM -->
+    <section>
+      <div class="label-eyebrow">The problem</div>
+      <p class="problem-quote">
+        &ldquo;Five worktrees, three blocked agents, two stale rebases, a Jira ticket
+        I just got assigned, and a PR waiting on a review I forgot about.
+        The coding part isn&rsquo;t the bottleneck anymore.&rdquo;
+      </p>
+      <p class="problem-attribution">— anyone running more than one Claude Code session at a time</p>
+    </section>
+
+    <!-- CAPABILITIES -->
+    <section>
+      <div class="label-eyebrow">What Orra does</div>
+      <h2 class="section-title">Three things, all <em>in service of focus</em>.</h2>
+      <div class="caps">
+        <div class="cap">
+          <svg class="cap-icon" viewBox="0 0 48 48" aria-hidden="true"><circle cx="24" cy="24" r="3" fill="#fbbf24"/><circle cx="10" cy="14" r="2" fill="#a3e635"/><circle cx="38" cy="16" r="2" fill="#fbbf24"/><circle cx="14" cy="36" r="2" fill="#f87171"/><circle cx="36" cy="34" r="2" fill="#a3e635"/><line x1="24" y1="24" x2="10" y2="14" stroke="#fbbf24" stroke-width="0.5" opacity="0.4"/><line x1="24" y1="24" x2="38" y2="16" stroke="#fbbf24" stroke-width="0.5" opacity="0.4"/><line x1="24" y1="24" x2="14" y2="36" stroke="#fbbf24" stroke-width="0.5" opacity="0.4"/><line x1="24" y1="24" x2="36" y2="34" stroke="#fbbf24" stroke-width="0.5" opacity="0.4"/></svg>
+          <h3>Awareness</h3>
+          <p>Scans every worktree, ticket, and agent in one pass. Classifies status, surfaces what's due, and pre-computes summaries — so the briefing is composed before you finish typing.</p>
+        </div>
+        <div class="cap">
+          <svg class="cap-icon" viewBox="0 0 48 48" aria-hidden="true"><path d="M 8 12 L 8 36 L 40 36" stroke="#fbbf24" stroke-width="1" fill="none"/><circle cx="14" cy="28" r="1.5" fill="#fef3c7"/><circle cx="22" cy="22" r="1.5" fill="#fef3c7"/><circle cx="30" cy="18" r="1.5" fill="#fef3c7"/><circle cx="38" cy="14" r="2" fill="#fbbf24"/></svg>
+          <h3>Learning</h3>
+          <p>A markdown memory layer. Daily notes, commitments, per-worktree context — all persisted across sessions, all grep-friendly. Yesterday's first move shows up in today's briefing.</p>
+        </div>
+        <div class="cap">
+          <svg class="cap-icon" viewBox="0 0 48 48" aria-hidden="true"><circle cx="14" cy="14" r="2" fill="#a3e635"/><circle cx="34" cy="14" r="2" fill="#fbbf24"/><circle cx="14" cy="34" r="2" fill="#fbbf24"/><circle cx="34" cy="34" r="2" fill="#a3e635"/><circle cx="24" cy="24" r="3" fill="#fbbf24"/><circle cx="24" cy="24" r="8" fill="none" stroke="#fbbf24" stroke-width="0.5" opacity="0.4"/></svg>
+          <h3>Side tasks</h3>
+          <p>Spawn detached <code style="color:#fbbf24;font-size:13px;">claude --print</code> agents for routine work — bug investigations, rebases, lint fixes. They run in the background; Orra surfaces their state on the next scan.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- SELF-PACING / HEARTBEAT -->
+    <section class="alive-section">
+      <div class="label-eyebrow">Self-pacing</div>
+      <h2 class="section-title">Arm the heartbeat. Orra <em>checks itself</em>.</h2>
+      <p class="section-lede">Orra isn't a daemon — it lives inside your Claude Code session. But arm the heartbeat with one line, and every directive starts firing on its own declared cadence: every 5 min, every 30 min, on session start. While you focus on one thing, Orra's checking the others.</p>
+
+      <div class="arm-line"><span class="dollar">$</span><span class="cmd">/loop 5m heartbeat tick</span></div>
+      <div class="arm-caption">— that's it. Stop with <code>stop heartbeat</code>. Each directive owns its own cadence; <code>/loop</code> is just the engine.</div>
+
+      <div class="alive-grid">
+        <div class="pulse-anchor">
+          <div class="pulse-header">
+            <span class="pulse-dot live"></span>
+            <span>heartbeat · armed at 09:14</span>
+          </div>
+          <div class="pulse-row">
+            <span class="pulse-time">09:14</span><span class="pulse-dot"></span>
+            <span class="pulse-text">morning-briefing<span class="pulse-text-meta">— delivered (on session start)</span></span>
+          </div>
+          <div class="pulse-row">
+            <span class="pulse-time">11:23</span><span class="pulse-dot"></span>
+            <span class="pulse-text">pr-shepherd<span class="pulse-text-meta">— billing-fix CI passed, mergeable</span></span>
+          </div>
+          <div class="pulse-row">
+            <span class="pulse-time">13:47</span><span class="pulse-dot"></span>
+            <span class="pulse-text">monitor-agents<span class="pulse-text-meta">— agent_3xj wrote findings note</span></span>
+          </div>
+          <div class="pulse-row">
+            <span class="pulse-time">14:00</span><span class="pulse-dot"></span>
+            <span class="pulse-text">stale-cleanup<span class="pulse-text-meta">— flagged 2 worktrees idle 3+ days</span></span>
+          </div>
+          <div class="pulse-row">
+            <span class="pulse-time">15:32</span><span class="pulse-dot"></span>
+            <span class="pulse-text">linear-deadline-tracker<span class="pulse-text-meta">— AUTH-142, 1h to ship</span></span>
+          </div>
+          <div class="pulse-row">
+            <span class="pulse-time">15:35</span><span class="pulse-dot live"></span>
+            <span class="pulse-text">auto-remediator<span class="pulse-text-meta">— rebasing 2 stale branches now...</span></span>
+          </div>
+        </div>
+        <div>
+          <h3 class="alive-prose-h3">A heartbeat, not a daemon.</h3>
+          <p class="alive-prose">Most MCP tools are reactive — you ask, they answer. Orra inverts that <em>within your session</em>. Each directive declares its own cadence, and the heartbeat tick wakes them on schedule. While you're heads-down on one thing, the other things still get checked.</p>
+          <p class="alive-prose">When the heartbeat surfaces something that needs you, it surfaces. When it doesn't, it stays out of your way — and the timeline keeps building so you can read it back later.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- DIRECTIVES (extensibility) -->
+    <section class="directives-section">
+      <div class="label-eyebrow">How it composes</div>
+      <h2 class="section-title">Connect any MCP. <em>Make it proactive.</em></h2>
+      <p class="section-lede">A directive is just a markdown file. If you have an MCP installed (Linear, Slack, Sentry, Jira, your own), write a directive that calls its tools — declare the lane and the cadence, drop it in <code style="color:var(--amber);">.orra/directives/</code>, and the heartbeat does the rest. No code, no plugin API.</p>
+
+      <div class="directives-grid">
+        <div class="directives-col">
+          <h4>Ten ship in the box</h4>
+          <div class="chips">
+            <span class="chip">morning-briefing</span>
+            <span class="chip">shutdown-ritual</span>
+            <span class="chip">memory-recall</span>
+            <span class="chip">linear-tasks</span>
+            <span class="chip">linear-deadline-tracker</span>
+            <span class="chip">pr-shepherd</span>
+            <span class="chip">stale-cleanup</span>
+            <span class="chip">monitor-agents</span>
+            <span class="chip">auto-remediator</span>
+            <span class="chip">wait-time-recycler</span>
+          </div>
+        </div>
+        <div class="directives-col">
+          <h4>Or write your own</h4>
+          <div class="chips">
+            <span class="chip custom">sentry-on-call</span>
+            <span class="chip custom">slack-mentions-since-9am</span>
+            <span class="chip custom">deploy-window-watcher</span>
+            <span class="chip custom">jira-blocked-tickets</span>
+            <span class="chip custom">datadog-alert-triage</span>
+            <span class="chip custom">notion-meeting-notes</span>
+            <span class="chip custom">pagerduty-handoff</span>
+          </div>
+          <p class="fine-print">— illustrative examples; you supply the matching MCP.</p>
+        </div>
+      </div>
+
+      <pre class="directive-snippet"><code><span class="comment">--- a directive is just markdown with frontmatter ---</span>
+<span class="head">---</span>
+<span class="key">name:</span> <span class="str">sentry-on-call</span>
+<span class="key">cadence:</span> <span class="str">5m</span>
+<span class="key">lane:</span> <span class="str">incident-watch</span>
+<span class="key">memory:</span>
+  <span class="key">read:</span> [<span class="str">on-call-rotation.md</span>]
+  <span class="key">write:</span> [<span class="str">incidents/YYYY-MM-DD.md</span>]
+<span class="head">---</span>
+
+<span class="head">### My Lane</span>
+On every heartbeat tick, check the Sentry MCP for new high-priority
+issues assigned to whoever's on call. Surface anything new, summarize
+the stack trace, suggest spawning an investigation agent if it looks
+fixable.</code></pre>
+    </section>
+
+    <!-- FOOTER CTA -->
+    <section class="footer-cta">
+      <h2>Take control of your worktree chaos.</h2>
+      <p class="footer-sub">Free, MIT-licensed, runs locally. Two minutes from <code style="color:var(--amber);">npm install</code> to your first morning briefing.</p>
+      <div class="install-line"><span class="dollar">$</span>npm install -g orra-mcp</div>
+      <div>
+        <a href="https://github.com/bjornj12/Orra-mcp" class="btn-primary">★ Star on GitHub</a>
+      </div>
+      <div class="footer-links">
+        <a href="https://github.com/bjornj12/Orra-mcp">GitHub</a>
+        <a href="https://www.npmjs.com/package/orra-mcp">npm</a>
+        <a href="https://github.com/bjornj12/Orra-mcp#readme">Docs</a>
+        <a href="https://github.com/bjornj12/Orra-mcp/blob/main/LICENSE">MIT License</a>
+      </div>
+    </section>
+  </main>
+</body>
+</html>

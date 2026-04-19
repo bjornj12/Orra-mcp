@@ -5,6 +5,10 @@
 
 ---
 
+**🌐 [Live site](https://bjornj12.github.io/Orra-mcp)** · [Star on GitHub](https://github.com/bjornj12/Orra-mcp) · [npm](https://www.npmjs.com/package/orra-mcp)
+
+---
+
 ```
 You: (just open Claude Code)
 
