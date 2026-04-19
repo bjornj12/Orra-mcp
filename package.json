@@ -29,6 +29,10 @@
     "url": "https://github.com/bjornj12/Orra-mcp/issues"
   },
   "homepage": "https://github.com/bjornj12/Orra-mcp#readme",
+  "author": {
+    "name": "Bjorn Olafur",
+    "email": "bjorn.olafur@gmail.com"
+  },
   "keywords": [
     "mcp",
     "claude-code",
