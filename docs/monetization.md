@@ -160,3 +160,59 @@ Outcome-based billing (#9) and the idle-capacity market (#12) are worth prototyp
 - **What's Anthropic's posture?** Partner, neutral, or competitor? The managed runtime play hinges on this.
 - **Is the memory layer a product or a feature?** If product: benchmarks + knowledge graph are the biggest bets. If feature: lean harder into orchestration + spawn runtime.
 - **What's our stance on data?** Strict "your `.orra/` never leaves your machine" is a trust moat but kills #10, #17, and half of #15. Pick one and mean it.
+
+---
+
+## Success thresholds — when to start monetizing
+
+### Stars are vanity. Use them anyway.
+
+GitHub stars are a lossy, gameable, trailing signal. People star things they'll never install. But they're the only public number that's legible to investors, partners, and potential hires — so we set explicit thresholds *and* pair every threshold with a leading-indicator check so we don't fool ourselves.
+
+Orra's niche is narrow: Claude Code users who juggle multiple worktrees. Realistic TAM today is probably 50k–500k globally, growing with Claude Code adoption. Calibrate against that, not against generic dev tools.
+
+### Star tiers and what each triggers
+
+| Stars | What it means for Orra's niche | What we do |
+|---|---|---|
+| **0–250** | Early-adopter curiosity. Launch-week bump, HN/Reddit hits. | Ship, polish, write directives. Do **not** think about money. Talk to every user by name. |
+| **250–750** | Signal that interest exists beyond the friends-and-family ring. | Add a mailing list on the README. Add lightweight, opt-in usage telemetry (install count, tool-call counts) — consent-first, aggregatable only. Start a `#showcase` in discussions. |
+| **750–2,000** | Real niche traction. Outsiders writing blog posts unprompted. | Soft-pilot **Pro Personal** ($9/mo hosted memory sync) with 50–100 friendly users. Launch **GitHub Sponsors**. First paid directive pack as an experiment. This is where monetization questions become legitimate. |
+| **2,000–5,000** | Validated niche product. Comparable to other well-regarded MCP-ecosystem tools at this stage. | **Full green light for Team tier.** Hire one more engineer. Stand up the dashboard. Begin 3–5 **shadow-mode engagements** (#11) with paying teams to fund the managed runtime. |
+| **5,000–10,000** | Hit for this category. Credibility to fundraise if we want to. | Launch **managed spawn runtime** (#2). Decide on venture path vs. bootstrapped. Compliance tier (#15) becomes worth building. |
+| **10,000+** | Breakout. Anthropic's attention is inevitable. | Execute portfolio. Negotiate partnership. This is where 5-year decisions get made. |
+
+### Leading indicators that matter more than stars
+
+Don't act on any star milestone unless at least **three** of these are also true:
+
+- **Weekly npm installs** — target 500+ at the 750-star mark, 2k+ at 2k stars. Install count beats star count for "real use."
+- **Daily active usage** (if opt-in telemetry is live) — 100+ unique installs running `orra_scan` daily at the 2k-star mark.
+- **Retention** — % of installs still running a week later. Target >40%. Under 20% means people are bouncing and stars are flattering us.
+- **Directive ecosystem health** — external contributors shipping directives into the Marketplace / discussions. Zero = no stickiness, regardless of stars.
+- **Unsolicited mentions** — blog posts, YouTube videos, conference talks, internal Slack shares that weren't prompted by us. This is the only signal nobody can game.
+- **Inbound "can I pay you?"** — the real signal. If nobody is asking to pay, the market isn't ready, whatever the star count says.
+- **PR velocity & issue engagement** — ratio of conversations/issues to stars. Low engagement at high stars = trend-bookmarking, not adoption.
+
+### Composite green-light (the rule)
+
+Start seriously building a paid offering when **all** of the following are true at the same time:
+
+1. ≥ **1,500 GitHub stars**
+2. ≥ **1,000 weekly npm installs**
+3. ≥ **30% week-2 retention** (opt-in telemetry)
+4. ≥ **5 unprompted external mentions** (blog/video/conference) in the last 60 days
+5. ≥ **3 unsolicited "how do we pay you?" messages** in the last 60 days
+
+Any single one of these in isolation is a flattering lie. All five together is the real signal.
+
+### What we are *not* going to do
+
+- **Chase a star number by launching on every aggregator site.** Easy to do, skews the signal, burns reputation.
+- **Spin up monetization before the composite green-light.** Premature paywalls kill OSS momentum and the top of the funnel is the product.
+- **Tie any employee's compensation to star count.** Incentive distortion we can't afford.
+- **Publicly commit to a star milestone as an external goal.** Internal targets only. Announcing "we'll monetize at 5k stars" invites people to either game or resent it.
+
+### Timeline sanity check
+
+If we haven't hit the 750-star tier 6 months after public launch, the problem is likely positioning, distribution, or product — not patience. Re-examine before doubling down. If we haven't hit the composite green-light 18 months in, the honest read is that Orra is a great side project, not a company. That's a valid outcome too.
