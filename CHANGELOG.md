@@ -18,6 +18,19 @@ adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 - Updated `@types/node`, `typescript`, `vitest` to latest patch versions.
 - Refreshed transitive dependencies; `npm audit` reports 0 vulnerabilities.
 
+## [0.1.1] — 2026-04-19
+
+### Fixed
+
+- Bin entries (`orra-mcp`, `orra-setup`) shipped without the execute bit
+  in 0.1.0, causing `npx orra-mcp` to fail with "Permission denied". Build
+  now `chmod +x`'s the entry points before pack.
+
+### Changed
+
+- `npm run verify` now invokes the bin via `npx` and stat-checks the
+  underlying file mode, so future regressions of this class fail loudly.
+
 ## [0.1.0] — 2026-04-14
 
 Initial open-source release.

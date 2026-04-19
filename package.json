@@ -1,6 +1,6 @@
 {
   "name": "orra-mcp",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "MCP server that turns Claude Code into a multi-agent orchestrator",
   "type": "module",
   "main": "dist/index.js",
@@ -15,7 +15,7 @@
   ],
   "scripts": {
     "clean": "rm -rf dist",
-    "build": "npm run clean && tsc && mkdir -p dist/templates/directives dist/templates/memory && cp src/templates/orchestrator.md dist/templates/orchestrator.md && cp src/templates/directives/*.md dist/templates/directives/ && cp src/templates/memory/*.md dist/templates/memory/",
+    "build": "npm run clean && tsc && mkdir -p dist/templates/directives dist/templates/memory && cp src/templates/orchestrator.md dist/templates/orchestrator.md && cp src/templates/directives/*.md dist/templates/directives/ && cp src/templates/memory/*.md dist/templates/memory/ && chmod +x dist/index.js dist/bin/setup.js",
     "dev": "tsc --watch",
     "test": "vitest run",
     "test:watch": "vitest",
