@@ -1,4 +1,12 @@
 ---
+lean: true
+cache_schema:
+  fields: [number, title, state, reviews, ci, mergeable, author, branch, age_hours]
+  summary_facets: [state, reviews, ci]
+escalate_when:
+  - "mergeable == true && reviews == approved"
+  - "ci == failing"
+allowed_tools: ["Bash(gh:*)", "mcp__orra__orra_cache_write"]
 heartbeat:
   cadence: 5m
   output: silent-on-noop
