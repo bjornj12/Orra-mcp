@@ -187,6 +187,23 @@ npm test
 
 See **[CONTRIBUTING.md](CONTRIBUTING.md)** for contribution guidelines.
 
+### Local development against a real project
+
+Test a worktree against a real Orra project by linking the local build as the `orra-mcp` binary:
+
+```bash
+npm run link:dev     # builds + globally links this worktree as orra-mcp
+# point your test Claude profile's MCP config at "command": "orra-mcp"
+# after source changes:
+npm run build       # symlink already targets dist/, no re-link needed
+# when done:
+npm run unlink:dev && npm i -g orra-mcp   # restore published version
+```
+
+`unlink:dev` leaves you with no `orra-mcp` on PATH until you either re-link or reinstall the published version.
+
+Note: `.claude/agents/orchestrator.md` is copied from the template at `orra_setup` time. If you change `src/templates/orchestrator.md` in your worktree, re-run `orra_setup` in the test project to pick it up (or `cp dist/templates/orchestrator.md <project>/.claude/agents/orchestrator.md`).
+
 ## Bugs and feature requests
 
 Please [open an issue](https://github.com/bjornj12/Orra-mcp/issues/new/choose) — the templates will guide you through what to include. For security vulnerabilities, see [SECURITY.md](SECURITY.md) instead.

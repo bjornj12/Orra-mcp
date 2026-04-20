@@ -21,6 +21,8 @@
     "test:watch": "vitest",
     "start": "node dist/index.js",
     "verify": "bash scripts/verify-publish.sh",
+    "link:dev": "npm run build && npm link",
+    "unlink:dev": "npm unlink -g orra-mcp",
     "prepublishOnly": "npm run build"
   },
   "repository": {
