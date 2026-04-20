@@ -65,10 +65,12 @@ Copies the full directive library (10 directives) into `.orra/directives/`. Each
 ### 4. Open Claude with the orchestrator persona
 
 ```bash
-claude --agent orchestrator
+claude --agent orchestrator --model sonnet
 ```
 
-The persona installed in step 2 takes over: the morning briefing fires on session start, directives load on their declared cadences, and `orra_scan` is the default first move. Alias it (`alias claude='claude --agent orchestrator'`) to make it your default.
+The persona installed in step 2 takes over: the morning briefing fires on session start, directives load on their declared cadences, and `orra_scan` is the default first move.
+
+**On the model:** the orchestrator's job is tool dispatch, log triage, and summarization — Sonnet handles all of it fluently at a fraction of the cost and latency of Opus. Save Opus for the actual coding work happening inside the worktrees. Alias the whole command (`alias claude='claude --agent orchestrator --model sonnet'`) to make it your default.
 
 > **Prefer auto-loading without `--agent`?** Append [`CLAUDE.template.md`](CLAUDE.template.md) to your project's `CLAUDE.md` instead. The persona then runs in every session, no flag required. Trade-off: it lives in your project's CLAUDE.md, which you may not want for monorepos shared with other workflows.
 
