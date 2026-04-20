@@ -56,5 +56,55 @@ describe("orra_resume", () => {
     const ss = JSON.parse(raw);
     expect(ss.session_id).toBe("s-new");
     expect(ss.tick_count).toBe(10); // preserved
+    expect(ss.last_resume_at).not.toBe(startIso);
+  });
+
+  it("resumed=true at age_seconds=299 with changed session_id", async () => {
+    const now = Date.now();
+    const oldIso = new Date(now - 299_000).toISOString();
+    const startIso = new Date(now - 3600_000).toISOString();
+    await writeCurrentSession(tmp, { session_id: "s-new", started_at: new Date(now).toISOString() });
+    await writeSessionState(tmp, {
+      ...initialSessionState({ session_id: "s-prev", now: startIso }),
+      last_checkpoint_at: oldIso,
+    });
+    const res = await handleOrraResume(tmp, orraResumeSchema.parse({}));
+    const body = JSON.parse(res.content[0].text);
+    expect(body.data.resumed).toBe(true);
+  });
+
+  it("resumed=false at age_seconds=300 (exact boundary, strict <)", async () => {
+    const now = Date.now();
+    const oldIso = new Date(now - 300_000).toISOString();
+    const startIso = new Date(now - 3600_000).toISOString();
+    await writeCurrentSession(tmp, { session_id: "s-new", started_at: new Date(now).toISOString() });
+    await writeSessionState(tmp, {
+      ...initialSessionState({ session_id: "s-prev", now: startIso }),
+      last_checkpoint_at: oldIso,
+    });
+    const res = await handleOrraResume(tmp, orraResumeSchema.parse({}));
+    const body = JSON.parse(res.content[0].text);
+    expect(body.data.resumed).toBe(false);
+  });
+
+  it("resumed=false when session_id unchanged (same session re-calling resume)", async () => {
+    const now = Date.now();
+    const recentIso = new Date(now - 60_000).toISOString();
+    const startIso = new Date(now - 3600_000).toISOString();
+    await writeCurrentSession(tmp, { session_id: "s-same", started_at: new Date(now).toISOString() });
+    await writeSessionState(tmp, {
+      ...initialSessionState({ session_id: "s-same", now: startIso }),
+      last_checkpoint_at: recentIso,
+    });
+    const res = await handleOrraResume(tmp, orraResumeSchema.parse({}));
+    const body = JSON.parse(res.content[0].text);
+    expect(body.data.resumed).toBe(false);
+  });
+
+  it("writes resume.md to .orra/resume.md on resume", async () => {
+    await writeCurrentSession(tmp, { session_id: "s1", started_at: new Date().toISOString() });
+    await handleOrraResume(tmp, orraResumeSchema.parse({}));
+    const md = await fs.readFile(path.join(tmp, ".orra", "resume.md"), "utf8");
+    expect(md).toContain("# Orra Session Resume");
   });
 });
