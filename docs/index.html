@@ -218,8 +218,7 @@ fixable.</code></pre>
 
   <script src="//cdn.mxpnl.com/libs/mixpanel-2-latest.min.js"></script>
   <script type="module">
-    import {
-      initAvo,
+    import Avo, {
       landingPageViewed,
       scrollDepthReached,
       ctaClicked,
@@ -239,7 +238,7 @@ fixable.</code></pre>
       }
     };
 
-    initAvo({ env: 'prod' }, {}, {}, MixpanelDestination);
+    Avo.initAvo({ env: 'prod' }, {}, {}, MixpanelDestination);
 
     const params = new URLSearchParams(window.location.search);
     landingPageViewed({
