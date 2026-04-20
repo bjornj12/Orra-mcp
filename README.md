@@ -149,6 +149,10 @@ No YAML frontmatter, no template engine — just markdown prose that Claude read
 
 Full authoring guide + explanation of the "lane" concept: **[docs/directives.md](docs/directives.md)**.
 
+### Long sessions
+
+Orra externalizes orchestrator state to `.orra/` so that `/compact` is survivable and heartbeat ticks stay lean. See [docs/context-management.md](docs/context-management.md).
+
 ## Tools
 
 | Tool | Purpose |
