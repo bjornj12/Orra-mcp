@@ -1,0 +1,25 @@
+{
+  "avo": {
+    "version": 3
+  },
+  "schema": {
+    "id": "wjDLNIGe6AuzM7tkaxGS",
+    "name": "Orra"
+  },
+  "branch": {
+    "id": "y45KqqmfUvBTD49X8iw0K",
+    "name": "landing-page-tracking"
+  },
+  "force": false,
+  "sources": [
+    {
+      "id": "MBuLZd7wiHeKEEOEEL-DE",
+      "name": "Web",
+      "path": "docs/Avo.js",
+      "interfacePath": "docs/Avo.js",
+      "actionId": "YuVwgFPUXegOV1Dphv6Z",
+      "branchId": "y45KqqmfUvBTD49X8iw0K",
+      "updatedAt": "2026-04-20T00:49:21.397Z"
+    }
+  ]
+}

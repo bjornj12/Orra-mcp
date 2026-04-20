@@ -15,13 +15,13 @@
       <h1>An <em>orchestrator</em> for the Claude Code era.</h1>
       <p class="lede">Multi-worktree development is a coordination problem, not a coding problem. Orra composes a briefing the moment you open Claude — and once armed, keeps checking the work in the background while you focus on yours.</p>
       <div class="cta-row">
-        <a href="https://github.com/bjornj12/Orra-mcp" class="btn-primary">★ Star on GitHub</a>
-        <a href="#transmission" class="btn-secondary">See it in action ↓</a>
+        <a href="https://github.com/bjornj12/Orra-mcp" class="btn-primary" data-cta-location="hero" data-cta-target="github">★ Star on GitHub</a>
+        <a href="#transmission" class="btn-secondary" data-cta-location="hero" data-cta-target="see_in_action">See it in action ↓</a>
       </div>
     </section>
 
     <!-- TRANSMISSION -->
-    <section class="transmission-section" id="transmission">
+    <section class="transmission-section" id="transmission" data-track-section>
       <div class="transmission-eyebrow">— a morning, with Orra —</div>
       <h2 class="transmission-title">You open Claude Code. <em>This</em> is what happens.</h2>
       <div class="transmission-frame">
@@ -64,7 +64,7 @@
     </section>
 
     <!-- PROBLEM -->
-    <section>
+    <section id="problem" data-track-section>
       <div class="label-eyebrow">The problem</div>
       <p class="problem-quote">
         &ldquo;Five worktrees, three blocked agents, two stale rebases, a Jira ticket
@@ -75,7 +75,7 @@
     </section>
 
     <!-- CAPABILITIES -->
-    <section>
+    <section id="capabilities" data-track-section>
       <div class="label-eyebrow">What Orra does</div>
       <h2 class="section-title">Three things, all <em>in service of focus</em>.</h2>
       <div class="caps">
@@ -98,7 +98,7 @@
     </section>
 
     <!-- SELF-PACING / HEARTBEAT -->
-    <section class="alive-section">
+    <section class="alive-section" id="heartbeat" data-track-section>
       <div class="label-eyebrow">Self-pacing</div>
       <h2 class="section-title">Arm the heartbeat. Orra <em>checks itself</em>.</h2>
       <p class="section-lede">Orra isn't a daemon — it lives inside your Claude Code session. But arm the heartbeat with one line, and every directive starts firing on its own declared cadence: every 5 min, every 30 min, on session start. While you focus on one thing, Orra's checking the others.</p>
@@ -146,7 +146,7 @@
     </section>
 
     <!-- DIRECTIVES (extensibility) -->
-    <section class="directives-section">
+    <section class="directives-section" id="directives" data-track-section>
       <div class="label-eyebrow">How it composes</div>
       <h2 class="section-title">Connect any MCP. <em>Make it proactive.</em></h2>
       <p class="section-lede">A directive is just a markdown file. If you have an MCP installed (Linear, Slack, Sentry, Jira, your own), write a directive that calls its tools — declare the lane and the cadence, drop it in <code style="color:var(--amber);">.orra/directives/</code>, and the heartbeat does the rest. No code, no plugin API.</p>
@@ -200,20 +200,99 @@ fixable.</code></pre>
     </section>
 
     <!-- FOOTER CTA -->
-    <section class="footer-cta">
+    <section class="footer-cta" id="footer" data-track-section>
       <h2>Take control of your worktree chaos.</h2>
       <p class="footer-sub">Free, MIT-licensed, runs locally. Two minutes from <code style="color:var(--amber);">npm install</code> to your first morning briefing.</p>
       <div class="install-line"><span class="dollar">$</span>npm install -g orra-mcp</div>
       <div>
-        <a href="https://github.com/bjornj12/Orra-mcp" class="btn-primary">★ Star on GitHub</a>
+        <a href="https://github.com/bjornj12/Orra-mcp" class="btn-primary" data-cta-location="footer" data-cta-target="github">★ Star on GitHub</a>
       </div>
       <div class="footer-links">
-        <a href="https://github.com/bjornj12/Orra-mcp">GitHub</a>
-        <a href="https://www.npmjs.com/package/orra-mcp">npm</a>
-        <a href="https://github.com/bjornj12/Orra-mcp#readme">Docs</a>
-        <a href="https://github.com/bjornj12/Orra-mcp/blob/main/LICENSE">MIT License</a>
+        <a href="https://github.com/bjornj12/Orra-mcp" data-cta-location="footer" data-cta-target="github">GitHub</a>
+        <a href="https://www.npmjs.com/package/orra-mcp" data-cta-location="footer" data-cta-target="npm">npm</a>
+        <a href="https://github.com/bjornj12/Orra-mcp#readme" data-cta-location="footer" data-cta-target="docs">Docs</a>
+        <a href="https://github.com/bjornj12/Orra-mcp/blob/main/LICENSE" data-cta-location="footer" data-cta-target="license">MIT License</a>
       </div>
     </section>
   </main>
+
+  <script src="//cdn.mxpnl.com/libs/mixpanel-2-latest.min.js"></script>
+  <script type="module">
+    import {
+      initAvo,
+      landingPageViewed,
+      scrollDepthReached,
+      ctaClicked,
+      sectionViewed
+    } from './Avo.js';
+
+    const MixpanelDestination = {
+      make: function (env, apiKey) {
+        mixpanel.init(apiKey, {
+          track_pageview: false,
+          persistence: 'localStorage',
+          api_transport: 'sendBeacon'
+        });
+      },
+      logEvent: function (eventName, eventProperties) {
+        mixpanel.track(eventName, eventProperties);
+      }
+    };
+
+    initAvo({ env: 'prod' }, {}, {}, MixpanelDestination);
+
+    const params = new URLSearchParams(window.location.search);
+    landingPageViewed({
+      referrer: document.referrer || '',
+      pagePath: window.location.pathname,
+      utmSource: params.get('utm_source') || '',
+      utmMedium: params.get('utm_medium') || '',
+      utmCampaign: params.get('utm_campaign') || ''
+    });
+
+    const depths = [25, 50, 75, 100];
+    const reachedDepths = new Set();
+    let scrollTimer;
+    function checkScroll() {
+      const scrollTop = window.scrollY || document.documentElement.scrollTop;
+      const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+      if (docHeight <= 0) return;
+      const pct = Math.round((scrollTop / docHeight) * 100);
+      depths.forEach(function (d) {
+        if (pct >= d && !reachedDepths.has(d)) {
+          reachedDepths.add(d);
+          scrollDepthReached({ depthPercent: d });
+        }
+      });
+    }
+    window.addEventListener('scroll', function () {
+      clearTimeout(scrollTimer);
+      scrollTimer = setTimeout(checkScroll, 100);
+    }, { passive: true });
+
+    document.addEventListener('click', function (e) {
+      const el = e.target.closest('[data-cta-target]');
+      if (!el) return;
+      ctaClicked({
+        ctaLocation: el.getAttribute('data-cta-location') || 'unknown',
+        ctaTarget: el.getAttribute('data-cta-target'),
+        href: el.getAttribute('href') || ''
+      });
+    });
+
+    const seenSections = new Set();
+    const sectionObserver = new IntersectionObserver(function (entries) {
+      entries.forEach(function (entry) {
+        if (!entry.isIntersecting) return;
+        const id = entry.target.id;
+        if (!id || seenSections.has(id)) return;
+        seenSections.add(id);
+        sectionViewed({ sectionId: id });
+      });
+    }, { threshold: 0.5 });
+    document.querySelectorAll('[data-track-section]').forEach(function (el) {
+      sectionObserver.observe(el);
+    });
+  </script>
 </body>
 </html>
