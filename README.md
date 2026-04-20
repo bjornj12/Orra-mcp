@@ -40,36 +40,37 @@ Orra is an MCP server that gives Claude Code three capabilities it doesn't have 
 
 ## Quick start
 
-### 1. Install
+### 1. Register the MCP server
 
 ```bash
-npm install -g orra-mcp
-claude mcp add orra -- orra-mcp
+claude mcp add orra -- npx orra-mcp
 ```
 
-Or without a global install: `claude mcp add orra -- npx orra-mcp`
+`npx` fetches and runs `orra-mcp` on demand — no global install needed. (If you'd rather install globally: `npm install -g orra-mcp` then `claude mcp add orra -- orra-mcp`.)
 
-### 2. Add orchestrator instructions to your project CLAUDE.md
+### 2. Scaffold the project
 
-```bash
-curl -sL https://raw.githubusercontent.com/bjornj12/Orra-mcp/main/CLAUDE.template.md >> your-project/CLAUDE.md
-```
-
-This tells Claude to use Orra for worktree management instead of doing the work directly.
-
-### 3. Restart Claude Code, then scaffold the project
-
-In your fresh session, run:
+In any Claude session, run:
 
 > "run orra_setup"
 
-This creates `.orra/config.json`, installs the orchestrator persona into `.claude/agents/`, adds `.orra/` to `.gitignore`, and scaffolds the memory layer. Idempotent — safe to re-run.
+This creates `.orra/config.json`, installs the orchestrator persona at `.claude/agents/orchestrator.md`, adds `.orra/` to `.gitignore`, and scaffolds the memory layer. Idempotent — safe to re-run.
 
-### 4. Install the directive pack
+### 3. Install the directive pack
 
 > "install all orra directives"
 
-Copies the full directive library (10 directives) into `.orra/directives/`. Each declares its own "lane" so they compose without conflict. Restart your session to load them.
+Copies the full directive library (10 directives) into `.orra/directives/`. Each declares its own "lane" so they compose without conflict.
+
+### 4. Open Claude with the orchestrator persona
+
+```bash
+claude --agent orchestrator
+```
+
+The persona installed in step 2 takes over: the morning briefing fires on session start, directives load on their declared cadences, and `orra_scan` is the default first move. Alias it (`alias claude='claude --agent orchestrator'`) to make it your default.
+
+> **Prefer auto-loading without `--agent`?** Append [`CLAUDE.template.md`](CLAUDE.template.md) to your project's `CLAUDE.md` instead. The persona then runs in every session, no flag required. Trade-off: it lives in your project's CLAUDE.md, which you may not want for monorepos shared with other workflows.
 
 ## A day with Orra
 
