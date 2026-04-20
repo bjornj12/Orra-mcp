@@ -1,4 +1,12 @@
 ---
+lean: true
+cache_schema:
+  fields: [id, title, deadline, days_remaining, status, owner]
+  summary_facets: [status]
+escalate_when:
+  - "days_remaining < 2"
+  - "days_remaining < 0"
+allowed_tools: ["Bash(linear:*)", "mcp__linear__*", "mcp__orra__orra_cache_write"]
 heartbeat:
   cadence: 1h
   output: silent-on-noop
