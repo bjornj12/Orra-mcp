@@ -1,4 +1,12 @@
 ---
+lean: true
+cache_schema:
+  fields: [worktree_id, status, last_activity, attention_score, blocked_on]
+  summary_facets: [status, blocked_on]
+escalate_when:
+  - "status == waiting"
+  - "attention_score > 0.7"
+allowed_tools: ["mcp__orra__orra_scan", "mcp__orra__orra_inspect", "mcp__orra__orra_cache_write"]
 heartbeat:
   cadence: 5m
   output: silent-on-noop
