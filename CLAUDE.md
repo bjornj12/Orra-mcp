@@ -13,7 +13,7 @@ Orra observes and coordinates worktrees, and can spawn detached headless agents 
 - **Coordination** — Register worktrees for tracking, unblock permission prompts, stop agents, rebase branches, install directives.
 - **Spawning** — Detached `claude --print` (headless) agents for routine maintenance, locked down to a safe `--allowed-tools` allowlist by default and capped by a configurable concurrency limit.
 
-**9 MCP tools:** orra_scan, orra_inspect, orra_register, orra_unblock, orra_kill, orra_rebase, orra_setup, orra_directive, orra_spawn
+**13 MCP tools:** orra_resume, orra_scan, orra_inspect, orra_register, orra_unblock, orra_kill, orra_rebase, orra_setup, orra_directive, orra_spawn, orra_tick, orra_checkpoint, orra_cache_write
 
 ## Testing
 
@@ -25,7 +25,7 @@ npm run build     # compile TypeScript
 ## Structure
 
 - `src/core/` — awareness engine, config, agent manager, worktree, state
-- `src/tools/` — MCP tool handlers (7 individual tools)
+- `src/tools/` — MCP tool handlers (13 individual tools)
 - `src/bin/` — hook script (file-based), setup script
 - `src/templates/` — orchestrator agent persona
 - `tests/` — unit + integration tests
