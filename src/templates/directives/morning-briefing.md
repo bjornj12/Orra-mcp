@@ -1,3 +1,9 @@
+---
+session_start: auto
+once_per: day
+resets_at: "08:00"
+---
+
 ## Morning Briefing
 
 Open each session with a 60-second, high-signal picture of the day. Compose it from multiple sources so the user doesn't have to mentally assemble the situation themselves.
