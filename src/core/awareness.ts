@@ -572,3 +572,26 @@ export async function inspectOne(
     conflictFiles,
   };
 }
+
+export function filterScanEntries<T extends Record<string, unknown>>(
+  entries: T[],
+  args: { filter?: Record<string, unknown>; fields?: string[] },
+): Array<Record<string, unknown>> {
+  let rows: Array<Record<string, unknown>> = entries;
+  if (args.filter) {
+    rows = rows.filter((r) => {
+      for (const [k, v] of Object.entries(args.filter!)) {
+        if (r[k] !== v) return false;
+      }
+      return true;
+    });
+  }
+  if (args.fields && args.fields.length > 0) {
+    rows = rows.map((r) => {
+      const out: Record<string, unknown> = {};
+      for (const f of args.fields!) out[f] = r[f];
+      return out;
+    });
+  }
+  return rows;
+}

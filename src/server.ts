@@ -14,7 +14,7 @@ export function createServer(projectRoot: string): { server: McpServer; manager:
   const server = new McpServer({ name: "orra-mcp", version: "0.3.0" });
   const manager = new AgentManager(projectRoot);
 
-  server.tool("orra_scan", "Scan all worktrees — returns status summary (ready_to_land, needs_attention, in_progress, idle, stale) with git state, file markers, PRs, and agent status.", orraScanSchema.shape, async () => handleOrraScan(projectRoot));
+  server.tool("orra_scan", "Scan all worktrees — returns status summary (ready_to_land, needs_attention, in_progress, idle, stale) with git state, file markers, PRs, and agent status.", orraScanSchema.shape, async (args) => handleOrraScan(projectRoot, orraScanSchema.parse(args)));
   server.tool("orra_inspect", "Deep dive on one worktree — full git state, commit log, markers, PR reviews, agent output, conflict prediction.", orraInspectSchema.shape, async (args) => handleOrraInspect(projectRoot, orraInspectSchema.parse(args)));
   server.tool("orra_register", "Register an existing worktree with Orra — installs hooks for agent state tracking and creates initial state file. Use this for worktrees you created manually or via another tool (e.g., Superset).", orraRegisterSchema.shape, async (args) => handleOrraRegister(projectRoot, orraRegisterSchema.parse(args)));
   server.tool("orra_kill", "Stop tracked agent (SIGTERM by PID) and optionally remove the worktree + clean branch. Optionally close PR.", orraKillSchema.shape, async (args) => handleOrraKill(manager, orraKillSchema.parse(args)));
