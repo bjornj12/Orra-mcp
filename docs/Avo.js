@@ -925,8 +925,8 @@ function _avo_invoke_payload(body) {
 
 _avo_invoke = function _avo_invoke(env, eventId, hash, messages, origin) {
   _avo_invoke_payload({
-    "ac": "YuVwgFPUXegOV1Dphv6Z",
-    "br": "y45KqqmfUvBTD49X8iw0K",
+    "ac": "8xBB89ytPi7M5LctLCzS",
+    "br": "master",
     "en": env,
     "ev": eventId,
     "ha": hash,
@@ -941,8 +941,8 @@ _avo_invoke = function _avo_invoke(env, eventId, hash, messages, origin) {
 
 _avo_invoke_meta = function _avo_invoke_meta(env, type, messages, origin) {
   _avo_invoke_payload({
-    "ac": "YuVwgFPUXegOV1Dphv6Z",
-    "br": "y45KqqmfUvBTD49X8iw0K",
+    "ac": "8xBB89ytPi7M5LctLCzS",
+    "br": "master",
     "en": env,
     "ty": type,
     "sc": "wjDLNIGe6AuzM7tkaxGS",
@@ -1016,25 +1016,25 @@ function _avo_debugger_send_position(position) {
 
 
 var CtaTarget = {
-  GITHUB: "github",
-  SEE_IN_ACTION: "see_in_action",
-  NPM: "npm",
   DOCS: "docs",
+  GITHUB: "github",
   LICENSE: "license",
+  NPM: "npm",
+  SEE_IN_ACTION: "see_in_action",
 };
 
 var SectionId = {
-  TRANSMISSION: "transmission",
-  PROBLEM: "problem",
   CAPABILITIES: "capabilities",
-  HEARTBEAT: "heartbeat",
   DIRECTIVES: "directives",
   FOOTER: "footer",
+  HEARTBEAT: "heartbeat",
+  PROBLEM: "problem",
+  TRANSMISSION: "transmission",
 };
 
 var CtaLocation = {
-  HERO: "hero",
   FOOTER: "footer",
+  HERO: "hero",
 };
 
 function assertPagePath(pagePath, label_) {
@@ -1070,12 +1070,12 @@ function assertReferrer(referrer, label_) {
 function assertCtaTarget(ctaTarget, label_) {
   var messages = [];
   messages = messages.concat(AvoAssert.assertString("Ykb9it2gzc6PCxF_1wHEi", label_ ? "cta_target" + ": " + label_ : "cta_target", ctaTarget));
-  if ("github" !== ctaTarget &&
-      "see_in_action" !== ctaTarget &&
+  if ("docs" !== ctaTarget &&
+      "github" !== ctaTarget &&
+      "license" !== ctaTarget &&
       "npm" !== ctaTarget &&
-      "docs" !== ctaTarget &&
-      "license" !== ctaTarget) {
-    var message = (label_ ? "cta_target" + ": " + label_ : "cta_target") + " should match one of the following values [ github | see_in_action | npm | docs | license ] but you provided the value " + ctaTarget
+      "see_in_action" !== ctaTarget) {
+    var message = (label_ ? "cta_target" + ": " + label_ : "cta_target") + " should match one of the following values [ docs | github | license | npm | see_in_action ] but you provided the value " + ctaTarget
     messages = messages.concat([{tag: 'expectedStringMatch', propertyId: "Ykb9it2gzc6PCxF_1wHEi", message: message}]);
   }
   return messages;
@@ -1084,13 +1084,13 @@ function assertCtaTarget(ctaTarget, label_) {
 function assertSectionId(sectionId, label_) {
   var messages = [];
   messages = messages.concat(AvoAssert.assertString("iNCodqCnMCciyW-dezV8c", label_ ? "section_id" + ": " + label_ : "section_id", sectionId));
-  if ("transmission" !== sectionId &&
-      "problem" !== sectionId &&
-      "capabilities" !== sectionId &&
-      "heartbeat" !== sectionId &&
+  if ("capabilities" !== sectionId &&
       "directives" !== sectionId &&
-      "footer" !== sectionId) {
-    var message = (label_ ? "section_id" + ": " + label_ : "section_id") + " should match one of the following values [ transmission | problem | capabilities | heartbeat | directives | footer ] but you provided the value " + sectionId
+      "footer" !== sectionId &&
+      "heartbeat" !== sectionId &&
+      "problem" !== sectionId &&
+      "transmission" !== sectionId) {
+    var message = (label_ ? "section_id" + ": " + label_ : "section_id") + " should match one of the following values [ capabilities | directives | footer | heartbeat | problem | transmission ] but you provided the value " + sectionId
     messages = messages.concat([{tag: 'expectedStringMatch', propertyId: "iNCodqCnMCciyW-dezV8c", message: message}]);
   }
   return messages;
@@ -1099,9 +1099,9 @@ function assertSectionId(sectionId, label_) {
 function assertCtaLocation(ctaLocation, label_) {
   var messages = [];
   messages = messages.concat(AvoAssert.assertString("l60xpWT4u0grXFYVEdu8r", label_ ? "cta_location" + ": " + label_ : "cta_location", ctaLocation));
-  if ("hero" !== ctaLocation &&
-      "footer" !== ctaLocation) {
-    var message = (label_ ? "cta_location" + ": " + label_ : "cta_location") + " should match one of the following values [ hero | footer ] but you provided the value " + ctaLocation
+  if ("footer" !== ctaLocation &&
+      "hero" !== ctaLocation) {
+    var message = (label_ ? "cta_location" + ": " + label_ : "cta_location") + " should match one of the following values [ footer | hero ] but you provided the value " + ctaLocation
     messages = messages.concat([{tag: 'expectedStringMatch', propertyId: "l60xpWT4u0grXFYVEdu8r", message: message}]);
   }
   return messages;
@@ -1310,7 +1310,7 @@ function initAvo(options, systemProperties, destinationOptions, MixpanelDestinat
  * @param {string} properties.utmCampaign - UTM campaign query param from the URL.
  * @param {string} properties.pagePath - Pathname of the page visited (e.g. /, /docs).
  * 
- * @see {@link https://www.avo.app/schemas/wjDLNIGe6AuzM7tkaxGS/branches/y45KqqmfUvBTD49X8iw0K/events/PXyzkvSYcMEclH2yTtxNE}
+ * @see {@link https://www.avo.app/schemas/wjDLNIGe6AuzM7tkaxGS/events/PXyzkvSYcMEclH2yTtxNE}
  */
 export function landingPageViewed(properties) {
   properties = properties || {};
@@ -1392,7 +1392,7 @@ export function landingPageViewed(properties) {
  * @param {object} properties - the properties associated with this event
  * @param {int} properties.depthPercent - Scroll depth as a percentage of full page height. One of 25, 50, 75, 100.
  * 
- * @see {@link https://www.avo.app/schemas/wjDLNIGe6AuzM7tkaxGS/branches/y45KqqmfUvBTD49X8iw0K/events/yVeFY8zq5j-Gykhu7xAjx}
+ * @see {@link https://www.avo.app/schemas/wjDLNIGe6AuzM7tkaxGS/events/yVeFY8zq5j-Gykhu7xAjx}
  */
 export function scrollDepthReached(properties) {
   properties = properties || {};
@@ -1452,7 +1452,7 @@ export function scrollDepthReached(properties) {
  * @param {string} properties.ctaTarget - Logical target of the CTA. One of: github, see_in_action, npm, docs, license.
  * @param {string} properties.href - The href the CTA points at.
  * 
- * @see {@link https://www.avo.app/schemas/wjDLNIGe6AuzM7tkaxGS/branches/y45KqqmfUvBTD49X8iw0K/events/n3Wb8MBX8dC0fPyxHKtHI}
+ * @see {@link https://www.avo.app/schemas/wjDLNIGe6AuzM7tkaxGS/events/n3Wb8MBX8dC0fPyxHKtHI}
  */
 export function ctaClicked(properties) {
   properties = properties || {};
@@ -1522,7 +1522,7 @@ export function ctaClicked(properties) {
  * @param {object} properties - the properties associated with this event
  * @param {string} properties.sectionId - DOM id of the section that became visible. One of: transmission, problem, capabilities, heartbeat, directives, footer.
  * 
- * @see {@link https://www.avo.app/schemas/wjDLNIGe6AuzM7tkaxGS/branches/y45KqqmfUvBTD49X8iw0K/events/rN0mAG5cFeulvmxQWP-eA}
+ * @see {@link https://www.avo.app/schemas/wjDLNIGe6AuzM7tkaxGS/events/rN0mAG5cFeulvmxQWP-eA}
  */
 export function sectionViewed(properties) {
   properties = properties || {};
