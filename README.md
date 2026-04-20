@@ -70,12 +70,18 @@ Copies the full directive library (10 directives) into `.orra/directives/`. Each
 ### 4. Open Claude with the orchestrator persona
 
 ```bash
-claude --agent orchestrator --model sonnet
+claude --agent orchestrator --model sonnet "session start"
 ```
 
 The persona installed in step 2 takes over: the morning briefing fires on session start, directives load on their declared cadences, and `orra_scan` is the default first move.
 
-**On the model:** the orchestrator's job is tool dispatch, log triage, and summarization — Sonnet handles all of it fluently at a fraction of the cost and latency of Opus. Save Opus for the actual coding work happening inside the worktrees. Alias the whole command (`alias claude='claude --agent orchestrator --model sonnet'`) to make it your default.
+**Why the `"session start"` at the end?** Claude Code's `--agent` flag loads the persona but doesn't give the agent a turn until you send a message. Passing `"session start"` as a positional prompt creates that first turn immediately, which is what triggers the `morning-briefing` directive's auto-run protocol. Without it, the agent sits at an idle prompt until you type something. Any first message will work — `"session start"` is just the convention.
+
+**On the model:** the orchestrator's job is tool dispatch, log triage, and summarization — Sonnet handles all of it fluently at a fraction of the cost and latency of Opus. Save Opus for the actual coding work happening inside the worktrees. Alias the whole command to make it your default:
+
+```bash
+alias orra='claude --agent orchestrator --model sonnet "session start"'
+```
 
 > **Prefer auto-loading without `--agent`?** Append [`CLAUDE.template.md`](CLAUDE.template.md) to your project's `CLAUDE.md` instead. The persona then runs in every session, no flag required. Trade-off: it lives in your project's CLAUDE.md, which you may not want for monorepos shared with other workflows.
 
