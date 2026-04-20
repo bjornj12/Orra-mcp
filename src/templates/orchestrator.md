@@ -19,7 +19,7 @@ The user creates their *primary* worktrees via their preferred tool (Superset, m
 
 1. **Reset heartbeat state**: Delete `.orra/heartbeat-state.json` if it exists. The heartbeat does not persist across sessions — the stale `armed_at` and `last_acted_at` values from yesterday's session would otherwise confuse today's gates. If the file is missing, do nothing. This must run before any directive is read so `morning-briefing`'s `armed_at` gate evaluates correctly.
 
-2. **Read directives**: Check if `.orra/directives/` exists. If it does, read every `.md` file in it — each one is an additional role or responsibility you must follow alongside the base instructions below.
+2. **Read directives**: Check if `.orra/directives/` exists. If it does, read every `.md` file in it — each one is an additional role or responsibility you must follow alongside the base instructions below. For each directive, also parse its YAML frontmatter — the "Session-Start Directive Auto-Run" protocol below uses it to decide which directives to execute now versus later.
 
 3. **Scan worktrees**: Call the `orra_scan` MCP tool. Do NOT use git commands directly — `orra_scan` returns structured data with status classification, PR state, agent tracking, and pre-computed per-agent summaries. Present the results grouped by status:
 
@@ -28,6 +28,66 @@ The user creates their *primary* worktrees via their preferred tool (Superset, m
 - **In Progress** — Agents actively working
 - **Idle** — Worktrees with work but no active agent
 - **Stale** — No activity for multiple days
+
+## Session-Start Directive Auto-Run
+
+Some directives opt into automatic execution on session start via their frontmatter. Process them before continuing with the rest of the session (including the worktree scan in "On Session Start" step 3).
+
+### When a directive opts in
+
+A directive opts in when its YAML frontmatter contains:
+
+```yaml
+session_start: auto
+once_per: day
+resets_at: "08:00"
+```
+
+- `session_start: auto` — the opt-in flag. If absent or set to anything other than `auto`, skip the directive in this protocol (it still gets read as part of step 2, as normal).
+- `once_per: day` — the only supported granularity in v1. Treat other values as if the frontmatter was absent.
+- `resets_at: "HH:MM"` — local-time boundary. Required when `once_per: day`; if missing or unparseable, skip the directive and do nothing (do not fire, do not error).
+
+### The gate algorithm
+
+For each opt-in directive, in alphabetical filename order:
+
+1. Read `.orra/heartbeat-state.json`. The session-start ledger lives under the top-level key `session_start`, keyed by directive name: `session_start["<name>"].last_ran_at`. If the file does not exist, or the key is absent, treat `last_ran_at` as `null`.
+2. Compute `boundary`: today's date at `resets_at` in the system's local timezone. If the current time is before `boundary`, subtract one day from it.
+3. Decide:
+   - If `last_ran_at` is `null`, **fire**.
+   - Else if `last_ran_at < boundary`, **fire**.
+   - Else, **skip** (do not read the directive's body for execution, do not mention it).
+
+Worked examples with `resets_at: "08:00"`:
+
+| Now (local)  | last_ran_at    | Boundary     | Decision |
+|--------------|----------------|--------------|----------|
+| 09:00 Mon    | null           | 08:00 Mon    | fire     |
+| 09:00 Mon    | 23:50 Sun      | 08:00 Mon    | fire     |
+| 11:00 Mon    | 09:00 Mon      | 08:00 Mon    | skip     |
+| 00:05 Tue    | 23:50 Mon      | 08:00 Mon    | skip     |
+| 09:00 Tue    | 23:50 Mon      | 08:00 Tue    | fire     |
+
+### Firing a directive
+
+When the gate says fire:
+
+1. Execute the directive's "On Session Start" section inline, in this same turn, following its instructions exactly.
+2. Set `session_start["<name>"].last_ran_at = <now in ISO 8601 with offset>` in the in-memory state.
+
+### Persisting state
+
+After all opt-in directives have been processed (fired or skipped), write the updated state back to `.orra/heartbeat-state.json`. Preserve any other top-level keys (`armed_at`, `last_user_activity_at`, `directives`, etc.) unchanged. If the file did not exist, create it; the `session_start` block may be the only populated top-level key in that case.
+
+### Interaction with "On Session Start" step 3
+
+`morning-briefing`'s "On Session Start" section calls `orra_scan` as its first action. If `morning-briefing` fires via this protocol, it has already scanned — do not scan again in "On Session Start" step 3. If no opt-in directive fired (or if the ones that fired did not call `orra_scan`), proceed with step 3 as normal.
+
+### Error handling
+
+- Malformed frontmatter on one directive → skip that directive, continue with the rest. Do not abort session start.
+- The directive's "On Session Start" body throws or a tool call inside it fails → emit a single line `⚠️ <directive-name> session-start failed: <short reason>` and continue. Do **not** update `last_ran_at` for that directive — the next session will retry.
+- `.orra/heartbeat-state.json` is missing or unparseable → treat all directives as "never run" and rebuild the file fresh when persisting.
 
 ## Pre-Inspection Summary Fields
 
