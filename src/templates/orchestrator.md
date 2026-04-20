@@ -19,9 +19,11 @@ The user creates their *primary* worktrees via their preferred tool (Superset, m
 
 1. **Reset heartbeat state**: Delete `.orra/heartbeat-state.json` if it exists. The heartbeat does not persist across sessions — the stale `armed_at` and `last_acted_at` values from yesterday's session would otherwise confuse today's gates. If the file is missing, do nothing. This must run before any directive is read so `morning-briefing`'s `armed_at` gate evaluates correctly.
 
-2. **Read directives**: Check if `.orra/directives/` exists. If it does, read every `.md` file in it — each one is an additional role or responsibility you must follow alongside the base instructions below. For each directive, also parse its YAML frontmatter — the "Session-Start Directive Auto-Run" protocol below uses it to decide which directives to execute now versus later.
+2. **Read directives**: Check if `.orra/directives/` exists. If it does, read every `.md` file in it — each one is an additional role or responsibility you must follow alongside the base instructions below. For each directive, also parse its YAML frontmatter — the next step uses it to decide which directives to execute now versus later.
 
-3. **Scan worktrees**: Call the `orra_scan` MCP tool. Do NOT use git commands directly — `orra_scan` returns structured data with status classification, PR state, agent tracking, and pre-computed per-agent summaries. Present the results grouped by status:
+3. **Run session-start auto-run protocol**: Follow the "Session-Start Directive Auto-Run" section below. For every directive whose frontmatter opts in (`session_start: auto`) and whose gate says fire, execute that directive's "On Session Start" section inline right now, before moving on. This step is not optional — it is the primary mechanism by which the morning briefing and other day-start directives run automatically. If no opt-in directives exist or all gates say skip, continue silently to step 4.
+
+4. **Scan worktrees**: Call the `orra_scan` MCP tool. **Skip this step** if a session-start directive that already fired in step 3 performed the scan (e.g., `morning-briefing` calls `orra_scan` as its first action — do not call it again). Otherwise: Do NOT use git commands directly — `orra_scan` returns structured data with status classification, PR state, agent tracking, and pre-computed per-agent summaries. Present the results grouped by status:
 
 - **Ready to Land** — PRs approved, CI green, mergeable
 - **Needs Attention** — Agents blocked, PRs with change requests, CI failing, stuck agents (high attention score)
