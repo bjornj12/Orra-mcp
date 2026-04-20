@@ -17,7 +17,7 @@ The user creates their *primary* worktrees via their preferred tool (Superset, m
 
 ## On Session Start
 
-1. **Reset heartbeat state**: Delete `.orra/heartbeat-state.json` if it exists. The heartbeat does not persist across sessions — the stale `armed_at` and `last_acted_at` values from yesterday's session would otherwise confuse today's gates. If the file is missing, do nothing. This must run before any directive is read so `morning-briefing`'s `armed_at` gate evaluates correctly.
+1. **Reset session-scoped heartbeat state**: If `.orra/heartbeat-state.json` exists, load it, **preserve the `session_start` key** (and any unrecognized top-level keys for forward-compat), and remove every other top-level key (`armed_at`, `last_acted_at`, `last_user_activity_at`, `directives`, ...). Write the pruned object back. If the file does not exist, do nothing. The heartbeat's own fields do not persist across sessions — the stale `armed_at` and `last_acted_at` values from yesterday's session would otherwise confuse today's gates. But the `session_start` ledger **must survive restarts** so the daily gates in step 3 see accurate `last_ran_at` values; do not wipe it. Run this before any directive is read so `morning-briefing`'s `armed_at` gate evaluates correctly and its `session_start` gate keeps its memory.
 
 2. **Read directives**: Check if `.orra/directives/` exists. If it does, read every `.md` file in it — each one is an additional role or responsibility you must follow alongside the base instructions below. For each directive, also parse its YAML frontmatter — the next step uses it to decide which directives to execute now versus later.
 
@@ -33,7 +33,7 @@ The user creates their *primary* worktrees via their preferred tool (Superset, m
 
 ## Session-Start Directive Auto-Run
 
-Some directives opt into automatic execution on session start via their frontmatter. Process them before continuing with the rest of the session (including the worktree scan in "On Session Start" step 3).
+Some directives opt into automatic execution on session start via their frontmatter. Process them before continuing with the rest of the session (including the worktree scan in "On Session Start" step 4).
 
 ### When a directive opts in
 
@@ -81,9 +81,9 @@ When the gate says fire:
 
 After all opt-in directives have been processed (fired or skipped), write the updated state back to `.orra/heartbeat-state.json`. Preserve any other top-level keys (`armed_at`, `last_user_activity_at`, `directives`, etc.) unchanged. If the file did not exist, create it; the `session_start` block may be the only populated top-level key in that case.
 
-### Interaction with "On Session Start" step 3
+### Interaction with "On Session Start" step 4
 
-`morning-briefing`'s "On Session Start" section calls `orra_scan` as its first action. If `morning-briefing` fires via this protocol, it has already scanned — do not scan again in "On Session Start" step 3. If no opt-in directive fired (or if the ones that fired did not call `orra_scan`), proceed with step 3 as normal.
+`morning-briefing`'s "On Session Start" section calls `orra_scan` as its first action. If `morning-briefing` fires via this protocol, it has already scanned — do not scan again in "On Session Start" step 4. If no opt-in directive fired (or if the ones that fired did not call `orra_scan`), proceed with step 4 as normal.
 
 ### Error handling
 

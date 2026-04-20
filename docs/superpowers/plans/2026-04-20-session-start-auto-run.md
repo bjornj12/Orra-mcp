@@ -200,21 +200,21 @@ In the test project, delete any existing `.orra/heartbeat-state.json` so the gat
 
 Run: `rm -f .orra/heartbeat-state.json`
 
-Then launch: `claude --agent orchestrator`
+Then launch: `claude --agent orchestrator "session start"`
 
 Expected: the agent produces the morning briefing output automatically, without being prompted. `.orra/heartbeat-state.json` now contains a `session_start.morning-briefing.last_ran_at` timestamp.
 
 - [ ] **Step 4: Confirm same-day re-run skips**
 
-Exit and immediately re-launch: `claude --agent orchestrator`
+Exit and immediately re-launch: `claude --agent orchestrator "session start"`
 
-Expected: no morning briefing output. The agent proceeds to the worktree scan (step 3) normally.
+Expected: no morning briefing output. The agent proceeds to the worktree scan (step 4) normally.
 
 - [ ] **Step 5: Confirm cross-boundary re-run fires**
 
 Manually edit `.orra/heartbeat-state.json` to set `session_start.morning-briefing.last_ran_at` to a timestamp that is before the most recent 08:00 boundary (e.g., `2025-01-01T00:00:00-08:00`).
 
-Re-launch: `claude --agent orchestrator`
+Re-launch: `claude --agent orchestrator "session start"`
 
 Expected: morning briefing fires again; `last_ran_at` is updated to the current time.
 

@@ -144,7 +144,7 @@ Describe when this fires and what to do, in free-form prose.
 - orra_scan (or whatever tools/files you rely on)
 ```
 
-No YAML frontmatter, no template engine — just markdown prose that Claude reads and follows.
+No template engine — just markdown prose that Claude reads and follows. YAML frontmatter is optional and today opts into one behavior: `session_start: auto` + `once_per: day` + `resets_at: "HH:MM"` tells the orchestrator to auto-run the directive's "On Session Start" section at most once per logical day (shipped `morning-briefing` uses this). Directives without frontmatter keep working exactly as before.
 
 **Two ways to create one:**
 

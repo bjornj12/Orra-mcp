@@ -5,9 +5,11 @@
 
 ## Problem
 
-When the user runs `claude --agent orchestrator` in a project with the `morning-briefing` directive installed, the orchestrator reads the directive file but does not execute its "On Session Start" section. The user has to explicitly prompt "run the morning briefing" every session.
+When the user runs `claude --agent orchestrator "session start"` in a project with the `morning-briefing` directive installed, the orchestrator reads the directive file but does not execute its "On Session Start" section on the first turn. The user has to explicitly prompt "run the morning briefing" every session.
 
 The morning-briefing directive explicitly describes itself as the "canonical session-start surface" for the directive set — meaning the system's entire design assumes it runs automatically at session start. The missing piece is a mechanism in the orchestrator persona to actually execute it.
+
+> **Note on Claude Code startup:** `--agent` only loads the persona; it does not give the LLM a turn. A turn starts with the first user message. So "automatic at session start" in practice means "on the first turn of the session." The recommended launch pattern is `claude --agent orchestrator "session start"` (a short positional prompt that creates an immediate first turn); the persona interprets any first turn as session start and runs the protocol below. This document's problem statement and success criteria assume that first turn exists.
 
 ## Goals
 
@@ -121,7 +123,7 @@ Directives are walked in alphabetical filename order (same as the heartbeat disp
 
 ## Success Criteria
 
-1. User runs `claude --agent orchestrator` in the morning → morning briefing fires automatically, same output as today's manually-prompted run.
+1. User runs `claude --agent orchestrator "session start"` in the morning → morning briefing fires automatically, same output as today's manually-prompted run.
 2. User runs another session at 3pm same day → no briefing, normal orchestrator behavior.
 3. User starts a session at 00:05 after a late-night session → no briefing (still in yesterday's window).
 4. User starts a session at 09:00 the next day → briefing fires.
