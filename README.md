@@ -5,6 +5,11 @@
 
 ---
 
+[![npm version](https://img.shields.io/npm/v/orra-mcp.svg?logo=npm&label=orra-mcp)](https://www.npmjs.com/package/orra-mcp)
+[![npm downloads](https://img.shields.io/npm/dm/orra-mcp.svg)](https://www.npmjs.com/package/orra-mcp)
+[![CI](https://img.shields.io/github/actions/workflow/status/bjornj12/Orra-mcp/ci.yml?branch=main&label=CI)](https://github.com/bjornj12/Orra-mcp/actions/workflows/ci.yml)
+[![license](https://img.shields.io/npm/l/orra-mcp.svg)](https://github.com/bjornj12/Orra-mcp/blob/main/LICENSE)
+
 **🌐 [Live site](https://bjornj12.github.io/Orra-mcp)** · [Star on GitHub](https://github.com/bjornj12/Orra-mcp) · [npm](https://www.npmjs.com/package/orra-mcp)
 
 ---
