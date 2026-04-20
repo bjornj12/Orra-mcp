@@ -129,3 +129,99 @@ export const ScanResultSchema = z.object({
   providerStatus: ProviderStatusSchema.optional(),
 });
 export type ScanResult = z.infer<typeof ScanResultSchema>;
+
+// ─── Context management ─────────────────────────────────────────────────────
+
+export const CacheSchemaDefSchema = z.object({
+  fields: z.array(z.string()),
+  summary_facets: z.array(z.string()),
+});
+export type CacheSchemaDef = z.infer<typeof CacheSchemaDefSchema>;
+
+export const SubagentSpecSchema = z.object({
+  directive_id: z.string(),
+  prompt: z.string(),
+  allowed_tools: z.array(z.string()),
+  cache_schema: CacheSchemaDefSchema,
+  escalate_when: z.array(z.string()).default([]),
+});
+export type SubagentSpec = z.infer<typeof SubagentSpecSchema>;
+
+export const OpenThreadSchema = z.object({
+  id: z.string(),
+  topic: z.string(),
+  status: z.string(),
+  since: z.string(),
+});
+export type OpenThread = z.infer<typeof OpenThreadSchema>;
+
+export const PressureSchema = z.object({
+  score: z.number(),
+  recommend_compact: z.boolean(),
+  reason: z.string().optional(),
+});
+export type Pressure = z.infer<typeof PressureSchema>;
+
+export const SessionStateSchema = z.object({
+  schema_version: z.literal(1),
+  session_id: z.string(),
+  session_started_at: z.string(),
+  last_resume_at: z.string(),
+  last_checkpoint_at: z.string().nullable().default(null),
+  tick_count: z.number().int().nonnegative().default(0),
+  pressure: PressureSchema.default({ score: 0, recommend_compact: false }),
+  seen: z.record(z.string(), z.union([
+    z.array(z.string()),
+    z.record(z.string(), z.string()),
+  ])).default({}),
+  last_surfaced: z.record(z.string(), z.object({
+    suggestion_id: z.string(),
+    at: z.string(),
+  })).default({}),
+  open_threads: z.array(OpenThreadSchema).default([]),
+  directive_notes: z.record(z.string(), z.string()).default({}),
+});
+export type SessionState = z.infer<typeof SessionStateSchema>;
+
+export const CurrentSessionSchema = z.object({
+  session_id: z.string(),
+  started_at: z.string(),
+});
+export type CurrentSession = z.infer<typeof CurrentSessionSchema>;
+
+export const CacheIndexSchema = z.object({
+  directive_id: z.string(),
+  fetched_at: z.string(),
+  total: z.number().int().nonnegative(),
+  facets: z.record(z.string(), z.record(z.string(), z.number())).default({}),
+  fields: z.array(z.string()),
+});
+export type CacheIndex = z.infer<typeof CacheIndexSchema>;
+
+export const CacheFileSchema = z.object({
+  directive_id: z.string(),
+  fetched_at: z.string(),
+  rows: z.array(z.record(z.string(), z.unknown())),
+});
+export type CacheFile = z.infer<typeof CacheFileSchema>;
+
+export const TickLogEntrySchema = z.object({
+  ts: z.string(),
+  directive_id: z.string(),
+  digest: z.string(),
+  cache_bytes: z.number().int().nonnegative(),
+  subagent_tokens: z.number().int().nonnegative().optional(),
+  subagent_duration_ms: z.number().int().nonnegative().optional(),
+  ok: z.boolean(),
+});
+export type TickLogEntry = z.infer<typeof TickLogEntrySchema>;
+
+export const ResumeResultSchema = z.object({
+  resumed: z.boolean(),
+  age_seconds: z.number().int().nonnegative(),
+  session_id: z.string(),
+  open_threads: z.array(OpenThreadSchema),
+  pressure: PressureSchema,
+  resume_md: z.string(),
+});
+export type ResumeResult = z.infer<typeof ResumeResultSchema>;
