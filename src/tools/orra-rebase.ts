@@ -2,6 +2,7 @@ import { z } from "zod";
 import type { AgentManager } from "../core/agent-manager.js";
 import { WorktreeManager } from "../core/worktree.js";
 import { SafeWorktreeIdSchema } from "../core/validation.js";
+import { ok, toMcpContent } from "../core/envelope.js";
 
 export const orraRebaseSchema = z.object({
   worktree: SafeWorktreeIdSchema.describe("Worktree ID"),
@@ -19,5 +20,5 @@ export async function handleOrraRebase(manager: AgentManager, projectRoot: strin
   if (wasRunning && result.success) {
     response.note = "Agent was stopped for rebase. The user should restart their Claude session in the worktree to continue work.";
   }
-  return { content: [{ type: "text" as const, text: JSON.stringify(response, null, 2) }] };
+  return toMcpContent(ok(response));
 }

@@ -5,6 +5,7 @@ import { fileURLToPath } from "node:url";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { isSafeWorktreeId } from "../core/validation.js";
+import { ok, fail, toMcpContent } from "../core/envelope.js";
 
 const execFileAsync = promisify(execFile);
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
@@ -35,24 +36,12 @@ export async function handleOrraRegister(
   // before any file operations use it.
   const resolved = await resolveWorktree(projectRoot, args.worktree);
   if (!resolved) {
-    return {
-      content: [{
-        type: "text" as const,
-        text: `Error: Worktree "${args.worktree}" is not a registered git worktree. Run 'git worktree list' to see available worktrees.`,
-      }],
-      isError: true,
-    };
+    return toMcpContent(fail(`Worktree "${args.worktree}" is not a registered git worktree. Run 'git worktree list' to see available worktrees.`));
   }
   const worktreePath = resolved;
   const worktreeId = path.basename(worktreePath);
   if (!isSafeWorktreeId(worktreeId)) {
-    return {
-      content: [{
-        type: "text" as const,
-        text: `Error: Worktree directory name "${worktreeId}" is not a safe identifier (must be alphanumerics, underscores, or hyphens).`,
-      }],
-      isError: true,
-    };
+    return toMcpContent(fail(`Worktree directory name "${worktreeId}" is not a safe identifier (must be alphanumerics, underscores, or hyphens).`));
   }
 
   // 1. Install hooks in the worktree's .claude/settings.local.json
@@ -130,19 +119,14 @@ export async function handleOrraRegister(
   await fsp.writeFile(tmpPath, JSON.stringify(agentState, null, 2));
   await fsp.rename(tmpPath, agentFile);
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        registered: true,
-        worktreeId,
-        worktreePath,
-        branch,
-        hooksInstalled: true,
-        agentDetected: pid > 0,
-      }, null, 2),
-    }],
-  };
+  return toMcpContent(ok({
+    registered: true,
+    worktreeId,
+    worktreePath,
+    branch,
+    hooksInstalled: true,
+    agentDetected: pid > 0,
+  }));
 }
 
 async function resolveWorktree(projectRoot: string, input: string): Promise<string | null> {

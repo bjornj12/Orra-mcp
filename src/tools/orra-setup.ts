@@ -3,6 +3,7 @@ import * as fsp from "node:fs/promises";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
+import { ok, toMcpContent } from "../core/envelope.js";
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 
@@ -67,14 +68,9 @@ export async function handleOrraSetup(projectRoot: string) {
     }
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        setup: true,
-        actions: results,
-        next: "Start a new session with: claude --agent orchestrator",
-      }, null, 2),
-    }],
-  };
+  return toMcpContent(ok({
+    setup: true,
+    actions: results,
+    next: "Start a new session with: claude --agent orchestrator",
+  }));
 }

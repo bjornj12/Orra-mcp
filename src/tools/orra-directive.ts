@@ -3,6 +3,7 @@ import * as fsp from "node:fs/promises";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
+import { ok as envOk, fail, toMcpContent } from "../core/envelope.js";
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 const examplesDir = path.join(currentDir, "..", "templates", "directives");
@@ -152,9 +153,9 @@ export async function handleOrraDirective(
 }
 
 function ok(data: Record<string, unknown>) {
-  return { content: [{ type: "text" as const, text: JSON.stringify(data, null, 2) }] };
+  return toMcpContent(envOk(data));
 }
 
 function error(msg: string) {
-  return { content: [{ type: "text" as const, text: `Error: ${msg}` }], isError: true };
+  return toMcpContent(fail(msg));
 }

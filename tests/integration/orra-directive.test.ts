@@ -24,7 +24,9 @@ async function listDirectives(): Promise<string[]> {
 }
 
 function parseResult(result: { content: { type: string; text: string }[] }): Record<string, unknown> {
-  return JSON.parse(result.content[0].text);
+  const env = JSON.parse(result.content[0].text);
+  if (!env.ok) throw new Error(`Expected ok envelope, got: ${result.content[0].text}`);
+  return env.data;
 }
 
 describe("orra_directive — install-all", () => {

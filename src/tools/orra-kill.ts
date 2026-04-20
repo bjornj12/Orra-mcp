@@ -1,6 +1,7 @@
 import { z } from "zod";
 import type { AgentManager } from "../core/agent-manager.js";
 import { SafeWorktreeIdSchema, isSafeBranchName } from "../core/validation.js";
+import { ok, fail, toMcpContent } from "../core/envelope.js";
 
 export const orraKillSchema = z.object({
   worktree: SafeWorktreeIdSchema.describe("Worktree ID"),
@@ -23,8 +24,8 @@ export async function handleOrraKill(manager: AgentManager, args: z.infer<typeof
         await execFileAsync("gh", ["pr", "close", "--delete-branch", "--", agent.branch], { timeout: 10000 });
       } catch {}
     }
-    return { content: [{ type: "text" as const, text: JSON.stringify(result, null, 2) }] };
+    return toMcpContent(ok(result));
   } catch (err) {
-    return { content: [{ type: "text" as const, text: `Error: ${err instanceof Error ? err.message : String(err)}` }], isError: true };
+    return toMcpContent(fail(err instanceof Error ? err.message : String(err)));
   }
 }
