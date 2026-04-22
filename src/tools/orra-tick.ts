@@ -46,7 +46,14 @@ export async function handleOrraTick(
   }
 
   const escalate_when = directive.frontmatter.escalate_when ?? [];
-  const allowed_tools = directive.frontmatter.allowed_tools ?? DEFAULT_ALLOWED_TOOLS;
+  const declared_tools = directive.frontmatter.allowed_tools ?? DEFAULT_ALLOWED_TOOLS;
+  // Lean subagents MUST be able to call mcp__orra__orra_cache_write — the
+  // contract ends by persisting the digest + rows. Inject it if a directive
+  // author declared allowed_tools but forgot to include it; otherwise the
+  // subagent would be unable to fulfill the contract.
+  const allowed_tools = declared_tools.includes("mcp__orra__orra_cache_write")
+    ? declared_tools
+    : [...declared_tools, "mcp__orra__orra_cache_write"];
 
   const prompt = buildSubagentPrompt({
     directive_id: args.directive_id,

@@ -14,6 +14,21 @@ describe("envelope", () => {
     });
   });
 
+  it("fail() extras cannot override reserved keys (ok/error/data)", () => {
+    const env = fail("bad", {
+      hint: "try again",
+      ok: true,
+      error: "good",
+      data: { hacked: true },
+    } as Record<string, unknown>);
+    expect(env.ok).toBe(false);
+    expect((env as { error: string }).error).toBe("bad");
+    expect((env as Record<string, unknown>).hint).toBe("try again");
+    expect((env as Record<string, unknown>).data).toEqual({ hacked: true });
+    // toMcpContent should still flag this as an error
+    expect(toMcpContent(env).isError).toBe(true);
+  });
+
   it("toMcpContent() returns compact JSON in text block", () => {
     const r = toMcpContent(ok({ a: 1 }));
     expect(r.content[0].type).toBe("text");

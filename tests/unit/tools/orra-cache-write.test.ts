@@ -38,12 +38,48 @@ describe("orra_cache_write", () => {
     const cache = JSON.parse(await fs.readFile(path.join(tmp, ".orra", "cache", "pr-shepherd.json"), "utf8"));
     expect(cache.rows).toHaveLength(1);
 
+    const index = JSON.parse(
+      await fs.readFile(path.join(tmp, ".orra", "cache", "pr-shepherd.index.json"), "utf8"),
+    );
+    expect(index).toEqual({
+      directive_id: "pr-shepherd",
+      fetched_at: "2026-04-20T14:40:00Z",
+      total: 1,
+      facets: { state: { mergeable: 1 } },
+      fields: ["id", "state"],
+    });
+
     const log = await fs.readFile(path.join(tmp, ".orra", "tick-log.jsonl"), "utf8");
     expect(log).toContain("pr-shepherd");
     expect(log).toContain("3 PRs, 1 mergeable");
 
     const ss = JSON.parse(await fs.readFile(path.join(tmp, ".orra", "session-state.json"), "utf8"));
     expect(ss.tick_count).toBe(1);
+  });
+
+  it("rejects args when index.directive_id disagrees with directive_id", async () => {
+    const res = await handleOrraCacheWrite(tmp, orraCacheWriteSchema.parse({
+      directive_id: "pr-shepherd",
+      digest: "0",
+      rows: [],
+      index: { directive_id: "linear-tasks", fetched_at: "t", total: 0, facets: {}, fields: [] },
+    }));
+    expect(res.isError).toBe(true);
+    const body = JSON.parse(res.content[0].text);
+    expect(body.ok).toBe(false);
+    expect(body.error).toMatch(/index.directive_id/);
+  });
+
+  it("rejects args when index.total disagrees with rows.length", async () => {
+    const res = await handleOrraCacheWrite(tmp, orraCacheWriteSchema.parse({
+      directive_id: "pr-shepherd",
+      digest: "bad-total",
+      rows: [{ id: "1" }, { id: "2" }],
+      index: { directive_id: "pr-shepherd", fetched_at: "t", total: 5, facets: {}, fields: ["id"] },
+    }));
+    expect(res.isError).toBe(true);
+    const body = JSON.parse(res.content[0].text);
+    expect(body.error).toMatch(/index.total/);
   });
 
   it("merges seen_add into session-state.seen", async () => {

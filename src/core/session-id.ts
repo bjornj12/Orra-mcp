@@ -1,6 +1,7 @@
 import * as fsp from "node:fs/promises";
 import * as path from "node:path";
 import { CurrentSessionSchema, type CurrentSession } from "../types.js";
+import { atomicWriteFile } from "./atomic-write.js";
 
 export function currentSessionPath(projectRoot: string): string {
   return path.join(projectRoot, ".orra", "current-session.json");
@@ -12,9 +13,7 @@ export async function writeCurrentSession(
 ): Promise<void> {
   const p = currentSessionPath(projectRoot);
   await fsp.mkdir(path.dirname(p), { recursive: true });
-  const tmp = p + ".tmp";
-  await fsp.writeFile(tmp, JSON.stringify(value));
-  await fsp.rename(tmp, p);
+  await atomicWriteFile(p, JSON.stringify(value));
 }
 
 export async function readCurrentSession(

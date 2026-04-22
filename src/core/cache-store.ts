@@ -6,16 +6,20 @@ import {
   type CacheFile,
   type CacheIndex,
 } from "../types.js";
+import { assertSafeDirectiveId } from "./validation.js";
+import { atomicWriteFile } from "./atomic-write.js";
 
 function cacheDir(projectRoot: string): string {
   return path.join(projectRoot, ".orra", "cache");
 }
 
 export function cachePath(projectRoot: string, directiveId: string): string {
+  assertSafeDirectiveId(directiveId);
   return path.join(cacheDir(projectRoot), `${directiveId}.json`);
 }
 
 export function cacheIndexPath(projectRoot: string, directiveId: string): string {
+  assertSafeDirectiveId(directiveId);
   return path.join(cacheDir(projectRoot), `${directiveId}.index.json`);
 }
 
@@ -34,8 +38,11 @@ export async function writeCache(
     fetched_at: args.fetched_at,
     rows: args.rows,
   };
-  await atomicWrite(cachePath(projectRoot, args.directive_id), JSON.stringify(file));
-  await atomicWrite(cacheIndexPath(projectRoot, args.directive_id), JSON.stringify(args.index));
+  // Write index first, then rows: if the second write fails, consumers see
+  // the newer index paired with an older rows file, which `queryCache` can
+  // still serve from; the inverse would leave rows without a facets summary.
+  await atomicWriteFile(cacheIndexPath(projectRoot, args.directive_id), JSON.stringify(args.index));
+  await atomicWriteFile(cachePath(projectRoot, args.directive_id), JSON.stringify(file));
 }
 
 export async function readCache(
@@ -106,7 +113,7 @@ export async function queryCache(
       return out;
     });
   }
-  if (args.limit && args.limit >= 0) rows = rows.slice(0, args.limit);
+  if (args.limit !== undefined && args.limit >= 0) rows = rows.slice(0, args.limit);
   return {
     directive_id: directiveId,
     fetched_at: cache.fetched_at,
@@ -133,8 +140,3 @@ function matchFilter(row: Record<string, unknown>, filter: Record<string, unknow
   return true;
 }
 
-async function atomicWrite(p: string, content: string): Promise<void> {
-  const tmp = p + ".tmp";
-  await fsp.writeFile(tmp, content);
-  await fsp.rename(tmp, p);
-}

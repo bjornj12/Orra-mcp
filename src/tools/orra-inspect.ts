@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { inspectOne } from "../core/awareness.js";
-import { SafeWorktreeIdSchema } from "../core/validation.js";
+import { SafeWorktreeIdSchema, isSafeWorktreeId } from "../core/validation.js";
 import { ok, fail, toMcpContent } from "../core/envelope.js";
 import { readSessionState } from "../core/session-state.js";
 import { queryCache } from "../core/cache-store.js";
@@ -15,11 +15,29 @@ export const orraInspectSchema = z.object({
   limit: z.number().int().nonnegative().optional().describe("For target='cache': cap rows returned."),
 });
 
+function defaultTarget(args: {
+  target?: string;
+  worktree?: string;
+  id?: string;
+  filter?: unknown;
+  fields?: unknown;
+  limit?: unknown;
+}): "worktree" | "session" | "cache" {
+  if (args.target === "worktree" || args.target === "session" || args.target === "cache") return args.target;
+  // Worktree ids and directive ids share the same slug shape, so we can't
+  // disambiguate from `id` alone. Cache-only arg presence (filter/fields/limit)
+  // is a strong signal; otherwise fall back to "worktree" for back-compat.
+  if (args.filter !== undefined || args.fields !== undefined || args.limit !== undefined) return "cache";
+  if (args.worktree) return "worktree";
+  if (args.id && isSafeWorktreeId(args.id)) return "worktree";
+  return "worktree";
+}
+
 export async function handleOrraInspect(
   projectRoot: string,
   args: z.infer<typeof orraInspectSchema>,
 ) {
-  const target = args.target ?? (args.worktree ? "worktree" : (args.id ? "worktree" : "worktree"));
+  const target = defaultTarget(args);
   try {
     if (target === "session") return handleSession(projectRoot);
     if (target === "cache") return handleCache(projectRoot, args);

@@ -9,10 +9,10 @@ import { WorktreeManager } from "../../../src/core/worktree.js";
 describe("orra_rebase error envelope", () => {
   it("returns {ok:false,error} with isError:true when rebase throws", async () => {
     const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "orra-rebase-err-"));
+    const spy = vi
+      .spyOn(WorktreeManager.prototype, "rebase")
+      .mockRejectedValueOnce(new Error("boom"));
     try {
-      const spy = vi
-        .spyOn(WorktreeManager.prototype, "rebase")
-        .mockRejectedValueOnce(new Error("boom"));
       const manager = new AgentManager(tmp);
       const res = await handleOrraRebase(
         manager,
@@ -23,8 +23,8 @@ describe("orra_rebase error envelope", () => {
       const body = JSON.parse(res.content[0].text);
       expect(body.ok).toBe(false);
       expect(body.error).toContain("boom");
-      spy.mockRestore();
     } finally {
+      spy.mockRestore();
       await fs.rm(tmp, { recursive: true, force: true });
     }
   });

@@ -23,7 +23,7 @@ describe("resume-gate", () => {
     expect(r.bootstrap).toBe(true);
   });
 
-  it("fails when current-session newer than last_resume_at", async () => {
+  it("fails when session-state session_id differs from current-session", async () => {
     await writeCurrentSession(tmp, { session_id: "s2", started_at: "2026-04-20T12:00:00Z" });
     await writeSessionState(
       tmp,

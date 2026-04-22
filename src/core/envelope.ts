@@ -7,7 +7,7 @@ export function ok<T>(data: T): Envelope<T> {
 }
 
 export function fail(error: string, extra?: Record<string, unknown>): Envelope<never> {
-  return { ok: false, error, ...(extra ?? {}) } as Envelope<never>;
+  return { ...(extra ?? {}), ok: false, error } as Envelope<never>;
 }
 
 export function toMcpContent(env: Envelope): {

@@ -50,9 +50,13 @@ describe("session-state", () => {
     ).rejects.toThrow();
   });
 
-  it("rejects malformed state on read", async () => {
+  it("throws on corrupted state so callers see the failure", async () => {
     await fs.mkdir(path.join(tmp, ".orra"), { recursive: true });
     await fs.writeFile(sessionStatePath(tmp), '{"schema_version":99}');
+    await expect(readSessionState(tmp)).rejects.toThrow(/corrupted/);
+  });
+
+  it("returns null when state file is missing (ENOENT)", async () => {
     expect(await readSessionState(tmp)).toBeNull();
   });
 });

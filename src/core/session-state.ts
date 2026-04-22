@@ -1,6 +1,7 @@
 import * as fsp from "node:fs/promises";
 import * as path from "node:path";
 import { SessionStateSchema, type SessionState } from "../types.js";
+import { atomicWriteFile } from "./atomic-write.js";
 
 export function sessionStatePath(projectRoot: string): string {
   return path.join(projectRoot, ".orra", "session-state.json");
@@ -25,13 +26,20 @@ export function initialSessionState(opts: { session_id: string; now: string }): 
 export async function readSessionState(
   projectRoot: string,
 ): Promise<SessionState | null> {
+  let raw: string;
   try {
-    const raw = await fsp.readFile(sessionStatePath(projectRoot), "utf8");
-    const parsed = SessionStateSchema.safeParse(JSON.parse(raw));
-    return parsed.success ? parsed.data : null;
-  } catch {
-    return null;
+    raw = await fsp.readFile(sessionStatePath(projectRoot), "utf8");
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw err;
   }
+  const parsed = SessionStateSchema.safeParse(JSON.parse(raw));
+  if (!parsed.success) {
+    throw new Error(
+      `session-state.json is corrupted: ${parsed.error.issues.map((i) => i.message).join("; ")}`,
+    );
+  }
+  return parsed.data;
 }
 
 export async function writeSessionState(
@@ -40,9 +48,7 @@ export async function writeSessionState(
 ): Promise<void> {
   const p = sessionStatePath(projectRoot);
   await fsp.mkdir(path.dirname(p), { recursive: true });
-  const tmp = p + ".tmp";
-  await fsp.writeFile(tmp, JSON.stringify(state));
-  await fsp.rename(tmp, p);
+  await atomicWriteFile(p, JSON.stringify(state));
 }
 
 export async function updateSessionState(

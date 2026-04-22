@@ -20,7 +20,14 @@ export async function gateOrPass<R extends { content: unknown[]; isError?: boole
   projectRoot: string,
   handler: () => Promise<R>,
 ): Promise<R> {
-  const gate = await checkResumeGate(projectRoot);
+  let gate;
+  try {
+    gate = await checkResumeGate(projectRoot);
+  } catch (err) {
+    return toMcpContent(
+      fail(err instanceof Error ? err.message : String(err)),
+    ) as unknown as R;
+  }
   if (!gate.ok) {
     return toMcpContent(fail("resume_required", { hint: gate.hint })) as unknown as R;
   }

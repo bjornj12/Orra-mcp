@@ -5,8 +5,8 @@ cache_schema:
   summary_facets: [status, blocked_on]
 escalate_when:
   - "status == waiting"
-  - "attention_score > 0.7"
-allowed_tools: ["mcp__orra__orra_scan", "mcp__orra__orra_inspect", "mcp__orra__orra_cache_write"]
+  - "attention_score >= 60"
+allowed_tools: ["mcp__orra__orra_scan", "mcp__orra__orra_inspect", "mcp__orra__orra_unblock", "mcp__orra__orra_cache_write"]
 heartbeat:
   cadence: 5m
   output: silent-on-noop

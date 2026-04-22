@@ -1,6 +1,6 @@
 {
   "name": "orra-mcp",
-  "version": "0.1.1",
+  "version": "0.4.0",
   "description": "MCP server that turns Claude Code into a multi-agent orchestrator",
   "type": "module",
   "main": "dist/index.js",

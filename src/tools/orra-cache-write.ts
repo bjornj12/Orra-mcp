@@ -26,6 +26,23 @@ export async function handleOrraCacheWrite(
   projectRoot: string,
   args: z.infer<typeof orraCacheWriteSchema>,
 ) {
+  if (args.index.directive_id !== args.directive_id) {
+    return toMcpContent(
+      fail(
+        `index.directive_id ('${args.index.directive_id}') must match directive_id ('${args.directive_id}').`,
+      ),
+    );
+  }
+  if (args.index.total !== args.rows.length) {
+    return toMcpContent(
+      fail(
+        `index.total (${args.index.total}) must equal rows.length (${args.rows.length}).`,
+      ),
+    );
+  }
+
+  const cache_bytes = JSON.stringify(args.rows).length;
+
   try {
     const fetched_at = args.index.fetched_at;
     await writeCache(projectRoot, {
@@ -33,17 +50,6 @@ export async function handleOrraCacheWrite(
       rows: args.rows,
       index: args.index,
       fetched_at,
-    });
-
-    const cache_bytes = JSON.stringify(args.rows).length;
-    await appendTickLog(projectRoot, {
-      ts: new Date().toISOString(),
-      directive_id: args.directive_id,
-      digest: args.digest,
-      cache_bytes,
-      subagent_tokens: args.subagent_tokens,
-      subagent_duration_ms: args.subagent_duration_ms,
-      ok: true,
     });
 
     await updateSessionState(projectRoot, (prev) => {
@@ -65,8 +71,29 @@ export async function handleOrraCacheWrite(
       };
     });
 
+    await appendTickLog(projectRoot, {
+      ts: new Date().toISOString(),
+      directive_id: args.directive_id,
+      digest: args.digest,
+      cache_bytes,
+      subagent_tokens: args.subagent_tokens,
+      subagent_duration_ms: args.subagent_duration_ms,
+      ok: true,
+    });
+
     return toMcpContent(ok({ written: true, directive_id: args.directive_id, cache_bytes }));
   } catch (err) {
-    return toMcpContent(fail(err instanceof Error ? err.message : String(err)));
+    const message = err instanceof Error ? err.message : String(err);
+    await appendTickLog(projectRoot, {
+      ts: new Date().toISOString(),
+      directive_id: args.directive_id,
+      digest: args.digest,
+      cache_bytes,
+      subagent_tokens: args.subagent_tokens,
+      subagent_duration_ms: args.subagent_duration_ms,
+      ok: false,
+      error: message,
+    }).catch(() => {});
+    return toMcpContent(fail(message));
   }
 }

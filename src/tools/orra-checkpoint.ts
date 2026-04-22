@@ -16,9 +16,8 @@ export async function handleOrraCheckpoint(
   args: z.infer<typeof orraCheckpointSchema>,
 ) {
   const now = new Date().toISOString();
-  let nextState;
   try {
-    nextState = await updateSessionState(projectRoot, (prev) => {
+    const nextState = await updateSessionState(projectRoot, (prev) => {
       const notes = args.notes ? { ...prev.directive_notes, _checkpoint: args.notes } : prev.directive_notes;
       const pressure = computePressure({
         session_started_at: prev.session_started_at,
@@ -32,22 +31,22 @@ export async function handleOrraCheckpoint(
         directive_notes: notes,
       };
     });
+
+    const recent = await readRecentTicks(projectRoot, 5);
+    const resume_md = renderResumeMd(nextState, recent);
+    await fsp.writeFile(resumeMdPath(projectRoot), resume_md);
+
+    const message = `checkpointed to .orra/session-state.json and regenerated .orra/resume.md (${nextState.tick_count} ticks, pressure ${nextState.pressure.score}).`;
+    return toMcpContent(
+      ok({
+        checkpointed: true,
+        reason: args.reason ?? null,
+        tick_count: nextState.tick_count,
+        pressure: nextState.pressure,
+        message,
+      }),
+    );
   } catch (err) {
     return toMcpContent(fail(err instanceof Error ? err.message : String(err)));
   }
-
-  const recent = await readRecentTicks(projectRoot, 5);
-  const resume_md = renderResumeMd(nextState, recent);
-  await fsp.writeFile(resumeMdPath(projectRoot), resume_md);
-
-  const message = `checkpointed to .orra/session-state.json and regenerated .orra/resume.md (${nextState.tick_count} ticks, pressure ${nextState.pressure.score}).`;
-  return toMcpContent(
-    ok({
-      checkpointed: true,
-      reason: args.reason ?? null,
-      tick_count: nextState.tick_count,
-      pressure: nextState.pressure,
-      message,
-    }),
-  );
 }

@@ -213,6 +213,7 @@ export const TickLogEntrySchema = z.object({
   subagent_tokens: z.number().int().nonnegative().optional(),
   subagent_duration_ms: z.number().int().nonnegative().optional(),
   ok: z.boolean(),
+  error: z.string().optional(),
 });
 export type TickLogEntry = z.infer<typeof TickLogEntrySchema>;
 
