@@ -124,3 +124,4 @@ The test suite does **not** mock git — it creates real temporary worktrees and
 - [docs/state-providers.md](state-providers.md) — pluggable metadata sources.
 - [docs/headless-spawning.md](headless-spawning.md) — the detached agent model.
 - [docs/directives.md](directives.md) — how the orchestrator persona + directives use these subsystems.
+- [docs/context-management.md](context-management.md) — externalized state (`session-state.json`, `resume.md`, `cache/`, `tick-log.jsonl`) that keeps long sessions survivable across `/compact`.

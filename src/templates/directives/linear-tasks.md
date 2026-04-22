@@ -1,4 +1,12 @@
 ---
+lean: true
+cache_schema:
+  fields: [id, title, priority, status, age_days, assignee, sla_state]
+  summary_facets: [priority, sla_state, status]
+escalate_when:
+  - "sla_state == breached"
+  - "age_days > 14"
+allowed_tools: ["Bash(linear:*)", "mcp__linear__*", "mcp__orra__orra_cache_write"]
 heartbeat:
   cadence: 30m
   output: silent-on-noop

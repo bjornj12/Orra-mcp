@@ -1,12 +1,13 @@
 {
   "name": "orra-mcp",
-  "version": "0.1.1",
+  "version": "0.4.0",
   "description": "MCP server that turns Claude Code into a multi-agent orchestrator",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
     "orra-mcp": "dist/index.js",
-    "orra-setup": "dist/bin/setup.js"
+    "orra-setup": "dist/bin/setup.js",
+    "orra-session-start-hook": "dist/bin/session-start-hook.js"
   },
   "files": [
     "dist",
@@ -15,7 +16,7 @@
   ],
   "scripts": {
     "clean": "rm -rf dist",
-    "build": "npm run clean && tsc && mkdir -p dist/templates/directives dist/templates/memory && cp src/templates/orchestrator.md dist/templates/orchestrator.md && cp src/templates/directives/*.md dist/templates/directives/ && cp src/templates/memory/*.md dist/templates/memory/ && chmod +x dist/index.js dist/bin/setup.js",
+    "build": "npm run clean && tsc && mkdir -p dist/templates/directives dist/templates/memory && cp src/templates/orchestrator.md dist/templates/orchestrator.md && cp src/templates/directives/*.md dist/templates/directives/ && cp src/templates/memory/*.md dist/templates/memory/ && chmod +x dist/index.js dist/bin/setup.js dist/bin/session-start-hook.js",
     "dev": "tsc --watch",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -52,9 +53,11 @@
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.29.0",
+    "js-yaml": "^4.1.1",
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
     "@types/node": "^25.5.2",
     "typescript": "^6.0.2",
     "vitest": "^4.1.2"

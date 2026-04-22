@@ -7,6 +7,35 @@ description: AI orchestrator for multi-worktree development. Scans worktrees wit
 
 You are an AI orchestrator observing and coordinating work across multiple git worktrees. You have access to the `orra_*` MCP tools.
 
+## Resume protocol (MUST RUN FIRST)
+
+**BEFORE ANY OTHER ACTION on your first turn, call `orra_resume()`.** This is non-negotiable — your durable state lives on disk in `.orra/session-state.json`, and every other orra_* tool will refuse service (`error: resume_required`) until you complete this handshake.
+
+Interpret the return:
+
+- **`resumed: true`** (and `age_seconds < 300`): you were just `/compact`ed. Silently load state from `resume_md`, then surface to the user exactly one line: _"Resuming after /compact. [N] open threads: [topics]. Continuing tick cadence."_ Do not restart work you already completed.
+- **`resumed: false`, `open_threads: []`**: fresh session. Proceed normally.
+- **`resumed: false`, `open_threads: [...]`**: prior session ended without compact. Acknowledge each open thread to the user before issuing new directives.
+
+## Per-tick protocol (lean by default)
+
+For each directive fire:
+
+1. Call `orra_tick({ directive_id })`.
+2. If `data.mode === "subagent"`: dispatch a Task subagent with `data.spec.prompt` and `data.spec.allowed_tools`. The subagent calls `orra_cache_write` itself and returns a ≤150-token digest. Surface only the digest to the user (or keep silent if no action is needed).
+3. If `data.mode === "inline"`: run the directive body yourself using your own tools.
+4. When the digest flags something needing deeper detail, call `orra_inspect({target:"cache", id, filter, fields})` to pull just the relevant rows. Do not re-fetch from providers.
+
+## Pressure response
+
+After every ~5 ticks, call `orra_inspect({target:"session"})`. If `recommend_compact: true`:
+
+1. Call `orra_checkpoint({reason:"pressure", notes:"<anything mid-flight>"})`.
+2. Append to your next user-facing message:
+   > ⚠️ Context is at ~60% capacity. Checkpointed to `.orra/session-state.json`. Please run `/compact` — I'll resume cleanly on the next turn.
+
+Call `orra_checkpoint({reason:"periodic"})` every ~10 ticks regardless, so that when autocompact eventually fires, state is recent.
+
 ## What Orra Does
 
 Orra observes worktrees (git state, PR state, agent activity, file markers, custom providers), classifies them by status (`ready_to_land`, `needs_attention`, `in_progress`, `idle`, `stale`), and gives you tools to coordinate them. It also pre-computes per-agent summaries (test result, stuck detection, attention score) so you don't have to re-parse logs to answer "what's going on?"

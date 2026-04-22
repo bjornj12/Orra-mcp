@@ -48,3 +48,27 @@ export function isSafeBranchName(value: string): boolean {
   if (value.endsWith(".") || value.endsWith("/")) return false;
   return true;
 }
+
+/**
+ * Directive IDs become filesystem paths like `.orra/directives/<id>.md`,
+ * `.orra/cache/<id>.json`, and `.orra/cache/<id>.index.json`. Without
+ * validation, ids containing `/`, `\`, or `..` can escape those directories
+ * and expose arbitrary repo files to `readFile`/`writeFile`.
+ *
+ * Accepted: same shape as worktree IDs — alphanumeric first char, then
+ * alphanumerics/underscore/hyphen, 1–100 chars. No dots (would collide with
+ * the `.index.json` suffix), no separators, no `..`.
+ */
+const DIRECTIVE_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,99}$/;
+
+export function isSafeDirectiveId(value: string): boolean {
+  return DIRECTIVE_ID_PATTERN.test(value);
+}
+
+export function assertSafeDirectiveId(value: string): void {
+  if (!isSafeDirectiveId(value)) {
+    throw new Error(
+      `Invalid directive id '${value}'. Must be 1–100 chars, alphanumeric/underscore/hyphen only, starting with a letter or digit.`,
+    );
+  }
+}

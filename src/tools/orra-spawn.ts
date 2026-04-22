@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { AgentManager } from "../core/agent-manager.js";
 import { ConcurrencyLimitError } from "../core/spawn-defaults.js";
+import { ok, fail, toMcpContent } from "../core/envelope.js";
 
 export const orraSpawnSchema = z.object({
   task: z.string().min(1).describe("The prompt for the spawned headless Claude agent."),
@@ -27,46 +28,21 @@ export async function handleOrraSpawn(
       model: input.model,
     });
 
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: JSON.stringify({
-            spawned: true,
-            ...result,
-            reason: input.reason,
-          }, null, 2),
-        },
-      ],
-    };
+    return toMcpContent(ok({
+      spawned: true,
+      ...result,
+      reason: input.reason,
+    }));
   } catch (err) {
     if (err instanceof ConcurrencyLimitError) {
-      return {
-        content: [
-          {
-            type: "text" as const,
-            text: JSON.stringify({
-              spawned: false,
-              error: "concurrency_limit",
-              current: err.current,
-              limit: err.limit,
-              message: err.message,
-            }, null, 2),
-          },
-        ],
-      };
+      return toMcpContent(fail(err.message, {
+        code: "concurrency_limit",
+        current: err.current,
+        limit: err.limit,
+      }));
     }
-    return {
-      content: [
-        {
-          type: "text" as const,
-          text: JSON.stringify({
-            spawned: false,
-            error: "spawn_failed",
-            message: err instanceof Error ? err.message : String(err),
-          }, null, 2),
-        },
-      ],
-    };
+    return toMcpContent(fail(err instanceof Error ? err.message : String(err), {
+      code: "spawn_failed",
+    }));
   }
 }

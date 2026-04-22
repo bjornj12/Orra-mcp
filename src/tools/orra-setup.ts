@@ -3,12 +3,13 @@ import * as fsp from "node:fs/promises";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
+import { ok, toMcpContent } from "../core/envelope.js";
 
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
 
 export const orraSetupSchema = z.object({});
 
-export async function handleOrraSetup(projectRoot: string) {
+export async function handleOrraSetup(projectRoot: string, _args?: z.infer<typeof orraSetupSchema>) {
   const results: string[] = [];
 
   // 1. Create .orra/config.json with defaults
@@ -67,14 +68,35 @@ export async function handleOrraSetup(projectRoot: string) {
     }
   }
 
-  return {
-    content: [{
-      type: "text" as const,
-      text: JSON.stringify({
-        setup: true,
-        actions: results,
-        next: "Start a new session with: claude --agent orchestrator",
-      }, null, 2),
-    }],
-  };
+  // 5. Install SessionStart hook in .claude/settings.json (merge, don't overwrite)
+  const settingsPath = path.join(projectRoot, ".claude", "settings.json");
+  let existing: Record<string, any> = {};
+  if (fs.existsSync(settingsPath)) {
+    try { existing = JSON.parse(await fsp.readFile(settingsPath, "utf8")); } catch { /* start fresh */ }
+  }
+  existing.hooks = existing.hooks ?? {};
+  existing.hooks.SessionStart = existing.hooks.SessionStart ?? [];
+
+  const HOOK_COMMAND = "npx orra-session-start-hook";
+  const alreadyInstalled = (existing.hooks.SessionStart as any[]).some((entry: any) =>
+    Array.isArray(entry?.hooks) &&
+    entry.hooks.some((h: any) => typeof h.command === "string" && h.command.includes("orra-session-start-hook")),
+  );
+  if (!alreadyInstalled) {
+    existing.hooks.SessionStart.push({
+      matcher: "",
+      hooks: [{ type: "command", command: HOOK_COMMAND }],
+    });
+    await fsp.mkdir(path.dirname(settingsPath), { recursive: true });
+    await fsp.writeFile(settingsPath, JSON.stringify(existing, null, 2));
+    results.push("Installed SessionStart hook in .claude/settings.json");
+  } else {
+    results.push("SessionStart hook already installed — skipped");
+  }
+
+  return toMcpContent(ok({
+    setup: true,
+    actions: results,
+    next: "Start a new session with: claude --agent orchestrator",
+  }));
 }

@@ -1,4 +1,12 @@
 ---
+lean: true
+cache_schema:
+  fields: [number, title, state, reviews, ci, mergeable, author, branch, age_hours]
+  summary_facets: [state, reviews, ci]
+escalate_when:
+  - "mergeable == true && reviews == approved"
+  - "ci == failing"
+allowed_tools: ["Bash(gh:*)", "mcp__orra__orra_cache_write"]
 heartbeat:
   cadence: 5m
   output: silent-on-noop
@@ -56,7 +64,8 @@ When the dispatcher wakes this directive with `since=<timestamp>`, do NOT sweep 
 
 1. Query for touched PRs. `since` arrives as an ISO timestamp (e.g. `2026-04-15T11:30:00Z`); GitHub's search syntax uses a date, so strip the time and use a `>=` to be safe:
    ```
-   gh pr list --search "is:open updated:>$since" --json number,title,headRefName,updatedAt,author,isDraft
+   since_date="${since%%T*}"
+   gh pr list --search "is:open updated:>=${since_date}" --json number,title,headRefName,updatedAt,author,isDraft
    ```
    Or, if you already know the set of worktrees backed by PRs from the last `orra_scan`, narrow with `--author @me` or explicit `--head` filters when that matches the user's workflow.
 
