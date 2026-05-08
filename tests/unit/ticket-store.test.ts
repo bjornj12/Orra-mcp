@@ -96,6 +96,13 @@ describe("TicketStore — list", () => {
     await store.archive("a");
     expect(await store.list()).toEqual([]);
   });
+
+  it("returns the original (unsanitized) worktreeId in list results", async () => {
+    await store.write("feat/auth", { primary: { id: "1", identifier: "A-1" }, source: "manual" });
+    const got = await store.list();
+    expect(got).toHaveLength(1);
+    expect(got[0].worktreeId).toBe("feat/auth");
+  });
 });
 
 describe("TicketStore — archive", () => {

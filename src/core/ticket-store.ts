@@ -70,9 +70,9 @@ export class TicketStore {
     const results: { worktreeId: string; file: TicketFile }[] = [];
     for (const entry of entries) {
       if (entry === "_archived" || !entry.endsWith(".json")) continue;
-      const worktreeId = entry.replace(/\.json$/, "");
-      const file = await this.read(worktreeId);
-      if (file) results.push({ worktreeId, file });
+      const sanitizedId = entry.replace(/\.json$/, "");
+      const file = await this.read(sanitizedId);
+      if (file) results.push({ worktreeId: file.worktree, file });
     }
     return results;
   }
