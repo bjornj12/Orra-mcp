@@ -132,3 +132,51 @@ describe("orra_attach_ticket — primary vs related", () => {
     expect(env.error).toMatch(/no primary/i);
   });
 });
+
+describe("orra_attach_ticket — manual flag protection", () => {
+  it("preserves manual=true when re-attaching with source=manual", async () => {
+    await handleOrraAttachTicket(tmpRoot, parse({
+      worktree: "auth-refactor",
+      ticket: { id: "uuid-1", identifier: "AUTH-142" },
+    }));
+    await handleOrraAttachTicket(tmpRoot, parse({
+      worktree: "auth-refactor",
+      ticket: { id: "uuid-1", identifier: "AUTH-142", title: "Updated" },
+    }));
+    const file = await new TicketStore(tmpRoot).read("auth-refactor");
+    expect(file?.manual).toBe(true);
+  });
+
+  it("refuses to overwrite a manual primary with a non-manual source", async () => {
+    await handleOrraAttachTicket(tmpRoot, parse({
+      worktree: "auth-refactor",
+      ticket: { id: "uuid-1", identifier: "AUTH-142" },
+    }));
+    const result = await handleOrraAttachTicket(tmpRoot, parse({
+      worktree: "auth-refactor",
+      ticket: { id: "uuid-2", identifier: "AUTH-200" },
+      source: "directive",
+    }));
+    const env = JSON.parse(result.content[0].text);
+    expect(env.ok).toBe(false);
+    expect(env.error).toMatch(/manual/i);
+    const file = await new TicketStore(tmpRoot).read("auth-refactor");
+    expect(file?.primary?.identifier).toBe("AUTH-142");
+  });
+
+  it("allows non-manual source to write when no manual flag is set", async () => {
+    await handleOrraAttachTicket(tmpRoot, parse({
+      worktree: "auth-refactor",
+      ticket: { id: "uuid-1", identifier: "AUTH-142" },
+      source: "directive",
+    }));
+    await handleOrraAttachTicket(tmpRoot, parse({
+      worktree: "auth-refactor",
+      ticket: { id: "uuid-2", identifier: "AUTH-200" },
+      source: "linear-provider",
+    }));
+    const file = await new TicketStore(tmpRoot).read("auth-refactor");
+    expect(file?.primary?.identifier).toBe("AUTH-200");
+    expect(file?.manual).toBeFalsy();
+  });
+});

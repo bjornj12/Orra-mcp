@@ -26,6 +26,11 @@ export async function handleOrraAttachTicket(
   const existing = await store.read(worktree);
 
   if (primary) {
+    if (existing?.manual && source !== "manual") {
+      return toMcpContent(fail(
+        `Cannot overwrite manual ticket on worktree "${worktree}" from source "${source}". Re-attach with source: "manual" to override, or detach first.`,
+      ));
+    }
     await store.write(worktree, {
       primary: ticket,
       related: existing?.related,
