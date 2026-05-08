@@ -51,3 +51,20 @@ describe("scan + ticket integration", () => {
     expect(entry?.ticket).toBeUndefined();
   });
 });
+
+describe("scan archives orphan tickets", () => {
+  it("moves a ticket to _archived/ when its worktree no longer exists", async () => {
+    const store = new TicketStore(projectRoot);
+    await store.write("wt-deleted", {
+      primary: { id: "uuid-1", identifier: "GONE-1" },
+      source: "manual",
+      manual: true,
+    });
+
+    expect(await store.read("wt-deleted")).not.toBeNull();
+    await scanAll(projectRoot);
+    expect(await store.read("wt-deleted")).toBeNull();
+    const archivedPath = path.join(projectRoot, ".orra", "tickets", "_archived", "wt-deleted.json");
+    expect(fs.existsSync(archivedPath)).toBe(true);
+  });
+});

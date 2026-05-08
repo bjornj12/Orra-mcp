@@ -458,6 +458,15 @@ export async function scanAll(projectRoot: string): Promise<ScanResult> {
     }
   }
 
+  // Step 9.5: Archive orphan tickets (worktrees that no longer exist)
+  const liveIds = new Set(entries.map((e) => e.id));
+  const allTickets = await ticketStore.list();
+  for (const { worktreeId } of allTickets) {
+    if (!liveIds.has(worktreeId)) {
+      await ticketStore.archive(worktreeId);
+    }
+  }
+
   // Step 10: Build summary
   const summary = {
     ready_to_land: 0,
