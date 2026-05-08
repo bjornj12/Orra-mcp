@@ -63,3 +63,72 @@ describe("orra_attach_ticket — validation", () => {
     })).toThrow();
   });
 });
+
+describe("orra_attach_ticket — primary vs related", () => {
+  it("appends to related[] when primary=false", async () => {
+    await handleOrraAttachTicket(tmpRoot, parse({
+      worktree: "auth-refactor",
+      ticket: { id: "uuid-1", identifier: "AUTH-142" },
+    }));
+    await handleOrraAttachTicket(tmpRoot, parse({
+      worktree: "auth-refactor",
+      ticket: { id: "uuid-2", identifier: "AUTH-150" },
+      primary: false,
+    }));
+    const file = await new TicketStore(tmpRoot).read("auth-refactor");
+    expect(file?.primary?.identifier).toBe("AUTH-142");
+    expect(file?.related).toHaveLength(1);
+    expect(file?.related?.[0].identifier).toBe("AUTH-150");
+  });
+
+  it("dedupes related[] by id", async () => {
+    await handleOrraAttachTicket(tmpRoot, parse({
+      worktree: "auth-refactor",
+      ticket: { id: "uuid-1", identifier: "AUTH-142" },
+    }));
+    await handleOrraAttachTicket(tmpRoot, parse({
+      worktree: "auth-refactor",
+      ticket: { id: "uuid-2", identifier: "AUTH-150", title: "v1" },
+      primary: false,
+    }));
+    await handleOrraAttachTicket(tmpRoot, parse({
+      worktree: "auth-refactor",
+      ticket: { id: "uuid-2", identifier: "AUTH-150", title: "v2" },
+      primary: false,
+    }));
+    const file = await new TicketStore(tmpRoot).read("auth-refactor");
+    expect(file?.related).toHaveLength(1);
+    expect(file?.related?.[0].title).toBe("v2");
+  });
+
+  it("preserves related[] when overwriting primary", async () => {
+    await handleOrraAttachTicket(tmpRoot, parse({
+      worktree: "auth-refactor",
+      ticket: { id: "uuid-1", identifier: "AUTH-142" },
+    }));
+    await handleOrraAttachTicket(tmpRoot, parse({
+      worktree: "auth-refactor",
+      ticket: { id: "uuid-2", identifier: "AUTH-150" },
+      primary: false,
+    }));
+    await handleOrraAttachTicket(tmpRoot, parse({
+      worktree: "auth-refactor",
+      ticket: { id: "uuid-1", identifier: "AUTH-142", title: "Updated" },
+    }));
+    const file = await new TicketStore(tmpRoot).read("auth-refactor");
+    expect(file?.primary?.title).toBe("Updated");
+    expect(file?.related).toHaveLength(1);
+    expect(file?.related?.[0].identifier).toBe("AUTH-150");
+  });
+
+  it("rejects related write when no primary exists yet", async () => {
+    const result = await handleOrraAttachTicket(tmpRoot, parse({
+      worktree: "auth-refactor",
+      ticket: { id: "uuid-2", identifier: "AUTH-150" },
+      primary: false,
+    }));
+    const env = JSON.parse(result.content[0].text);
+    expect(env.ok).toBe(false);
+    expect(env.error).toMatch(/no primary/i);
+  });
+});

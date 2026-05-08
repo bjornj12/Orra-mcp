@@ -23,17 +23,32 @@ export async function handleOrraAttachTicket(
 ) {
   const { worktree, ticket, primary, source } = args;
   const store = new TicketStore(projectRoot);
+  const existing = await store.read(worktree);
 
-  // Happy path: primary attachment overwrites file. manual flag set when source=="manual".
   if (primary) {
     await store.write(worktree, {
       primary: ticket,
+      related: existing?.related,
       source,
-      manual: source === "manual",
+      manual: source === "manual" ? true : existing?.manual,
     });
     return toMcpContent(ok({ worktree, identifier: ticket.identifier, primary: true }));
   }
 
-  // related[] handling lands in Task 5.
-  return toMcpContent(fail("related ticket attachment not implemented yet"));
+  // primary: false — append to related[], require primary already exists.
+  if (!existing?.primary) {
+    return toMcpContent(fail(
+      `Cannot attach related ticket: no primary ticket on worktree "${worktree}". Attach the primary first.`,
+    ));
+  }
+  const related = existing.related ?? [];
+  const filtered = related.filter((r) => r.id !== ticket.id);
+  filtered.push(ticket);
+  await store.write(worktree, {
+    primary: existing.primary,
+    related: filtered,
+    source,
+    manual: existing.manual,
+  });
+  return toMcpContent(ok({ worktree, identifier: ticket.identifier, primary: false }));
 }
