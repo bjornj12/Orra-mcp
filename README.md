@@ -192,6 +192,7 @@ Orra externalizes orchestrator state to `.orra/` so that `/compact` is survivabl
 | `orra_setup` | Scaffold `.orra/` + install orchestrator persona. Run once per project. |
 | `orra_directive` | Manage directives (add, list, remove, install shipped ones). |
 | `orra_spawn` | Spawn a detached headless agent for routine maintenance. |
+| `orra_attach_ticket` | Attach a Symphony-normalized issue/ticket to a worktree. Manual attachments take precedence over automatic sources. |
 
 ## Requirements
 

@@ -46,6 +46,11 @@ export class TicketStore {
     }
   }
 
+  /**
+   * Writes the ticket file atomically. Note: the `manual` flag is enforced
+   * by the tool layer (`orra_attach_ticket`), not here. Direct callers
+   * (e.g., LinearProvider) must check `existing.manual` before overwriting.
+   */
   async write(worktreeId: string, input: WriteInput): Promise<void> {
     await fsp.mkdir(this.dir(), { recursive: true });
     const file: TicketFile = {

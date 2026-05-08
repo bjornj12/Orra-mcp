@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import * as fs from "node:fs";
 import * as path from "node:path";
 import * as os from "node:os";
+import { execFileSync } from "node:child_process";
 import { handleOrraAttachTicket, orraAttachTicketSchema } from "../../src/tools/orra-attach-ticket.js";
 import { TicketStore } from "../../src/core/ticket-store.js";
 
@@ -9,7 +10,13 @@ let tmpRoot: string;
 
 beforeEach(() => {
   tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "orra-attach-"));
-  fs.mkdirSync(path.join(tmpRoot, "auth-refactor"));
+  execFileSync("git", ["init", "-q", "-b", "main"], { cwd: tmpRoot });
+  execFileSync("git", ["config", "user.email", "t@t"], { cwd: tmpRoot });
+  execFileSync("git", ["config", "user.name", "t"], { cwd: tmpRoot });
+  fs.writeFileSync(path.join(tmpRoot, "README"), "x");
+  execFileSync("git", ["add", "."], { cwd: tmpRoot });
+  execFileSync("git", ["commit", "-q", "-m", "init"], { cwd: tmpRoot });
+  execFileSync("git", ["worktree", "add", "-b", "feat", path.join(tmpRoot, "auth-refactor")], { cwd: tmpRoot });
 });
 
 afterEach(() => {
@@ -61,6 +68,16 @@ describe("orra_attach_ticket — validation", () => {
       worktree: "../etc/passwd",
       ticket: { id: "uuid-1", identifier: "AUTH-142" },
     })).toThrow();
+  });
+
+  it("rejects unknown worktree IDs", async () => {
+    const result = await handleOrraAttachTicket(tmpRoot, parse({
+      worktree: "nonexistent-worktree",
+      ticket: { id: "uuid-1", identifier: "AUTH-142" },
+    }));
+    const env = JSON.parse(result.content[0].text);
+    expect(env.ok).toBe(false);
+    expect(env.error).toMatch(/not a registered git worktree/i);
   });
 });
 
