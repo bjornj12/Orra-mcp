@@ -5,6 +5,7 @@ import {
   ProviderConfigSchema,
   ProviderCacheConfigSchema,
 } from "./core/providers/types.js";
+import { NormalizedIssueSchema } from "./core/types/normalized-issue.js";
 
 export { StageInfoSchema, ProviderStatusSchema };
 export type { StageInfo, ProviderStatus } from "./core/providers/types.js";
@@ -110,6 +111,10 @@ export const WorktreeScanEntrySchema = z.object({
   stage: StageInfoSchema.nullable().optional(),
   extras: z.record(z.string(), z.unknown()).optional(),
   summary: AgentSummarySchema.optional(),
+  ticket: z.object({
+    primary: NormalizedIssueSchema.optional(),
+    related: z.array(NormalizedIssueSchema).optional(),
+  }).optional(),
 });
 export type WorktreeScanEntry = z.infer<typeof WorktreeScanEntrySchema>;
 

@@ -16,6 +16,7 @@ import { buildProviders, fetchAndMergeProviders } from "./providers/index.js";
 import type { ProviderWorktree, StageInfo } from "./providers/types.js";
 import { loadPipeline, detectStage } from "./pipeline.js";
 import { getOrComputeSummary } from "./summary.js";
+import { TicketStore } from "./ticket-store.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -445,7 +446,19 @@ export async function scanAll(projectRoot: string): Promise<ScanResult> {
     };
   }));
 
-  // Step 9: Build summary
+  // Step 9: Attach tickets from TicketStore
+  const ticketStore = new TicketStore(projectRoot);
+  for (const entry of entries) {
+    const file = await ticketStore.read(entry.id);
+    if (file?.primary || file?.related?.length) {
+      entry.ticket = {
+        ...(file.primary ? { primary: file.primary } : {}),
+        ...(file.related && file.related.length ? { related: file.related } : {}),
+      };
+    }
+  }
+
+  // Step 10: Build summary
   const summary = {
     ready_to_land: 0,
     needs_attention: 0,
