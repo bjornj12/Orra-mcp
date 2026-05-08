@@ -58,4 +58,35 @@ export class TicketStore {
     };
     await atomicWriteFile(this.pathFor(worktreeId), JSON.stringify(file, null, 2));
   }
+
+  async list(): Promise<{ worktreeId: string; file: TicketFile }[]> {
+    let entries: string[];
+    try {
+      entries = await fsp.readdir(this.dir());
+    } catch (err: unknown) {
+      if ((err as NodeJS.ErrnoException).code === "ENOENT") return [];
+      throw err;
+    }
+    const results: { worktreeId: string; file: TicketFile }[] = [];
+    for (const entry of entries) {
+      if (entry === "_archived" || !entry.endsWith(".json")) continue;
+      const worktreeId = entry.replace(/\.json$/, "");
+      const file = await this.read(worktreeId);
+      if (file) results.push({ worktreeId, file });
+    }
+    return results;
+  }
+
+  async archive(worktreeId: string): Promise<void> {
+    const src = this.pathFor(worktreeId);
+    try {
+      await fsp.access(src);
+    } catch {
+      return;
+    }
+    const archivedDir = path.join(this.dir(), "_archived");
+    await fsp.mkdir(archivedDir, { recursive: true });
+    const dst = path.join(archivedDir, `${sanitizeWorktreeKey(worktreeId)}.json`);
+    await fsp.rename(src, dst);
+  }
 }

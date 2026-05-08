@@ -77,3 +77,48 @@ describe("TicketStore — write", () => {
     expect(after).not.toBe(before);
   });
 });
+
+describe("TicketStore — list", () => {
+  it("returns empty array when no tickets exist", async () => {
+    expect(await store.list()).toEqual([]);
+  });
+
+  it("returns all active tickets", async () => {
+    await store.write("a", { primary: { id: "1", identifier: "A-1" }, source: "manual" });
+    await store.write("b", { primary: { id: "2", identifier: "B-1" }, source: "manual" });
+    const got = await store.list();
+    expect(got).toHaveLength(2);
+    expect(got.map((e) => e.worktreeId).sort()).toEqual(["a", "b"]);
+  });
+
+  it("excludes archived tickets", async () => {
+    await store.write("a", { primary: { id: "1", identifier: "A-1" }, source: "manual" });
+    await store.archive("a");
+    expect(await store.list()).toEqual([]);
+  });
+});
+
+describe("TicketStore — archive", () => {
+  it("moves the file under _archived/", async () => {
+    await store.write("a", { primary: { id: "1", identifier: "A-1" }, source: "manual" });
+    await store.archive("a");
+    expect(await store.read("a")).toBeNull();
+    const archivedPath = path.join(tmpRoot, ".orra", "tickets", "_archived", "a.json");
+    expect(fs.existsSync(archivedPath)).toBe(true);
+  });
+
+  it("is a no-op when the file does not exist", async () => {
+    await expect(store.archive("nonexistent")).resolves.toBeUndefined();
+  });
+
+  it("overwrites a prior archive of the same worktree", async () => {
+    await store.write("a", { primary: { id: "1", identifier: "A-1" }, source: "manual" });
+    await store.archive("a");
+    await store.write("a", { primary: { id: "2", identifier: "A-2" }, source: "manual" });
+    await store.archive("a");
+    const archived = JSON.parse(
+      fs.readFileSync(path.join(tmpRoot, ".orra", "tickets", "_archived", "a.json"), "utf8"),
+    );
+    expect(archived.primary.identifier).toBe("A-2");
+  });
+});
