@@ -16,6 +16,7 @@ import { buildProviders, fetchAndMergeProviders } from "./providers/index.js";
 import type { ProviderWorktree, StageInfo } from "./providers/types.js";
 import { loadPipeline, detectStage } from "./pipeline.js";
 import { getOrComputeSummary } from "./summary.js";
+import { TicketStore } from "./ticket-store.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -445,7 +446,29 @@ export async function scanAll(projectRoot: string): Promise<ScanResult> {
     };
   }));
 
-  // Step 9: Build summary
+  // Attach stored tickets to scan entries; archive orphans
+  const ticketStore = new TicketStore(projectRoot);
+  const allTickets = await ticketStore.list();
+  const ticketByWorktreeId = new Map(allTickets.map((t) => [t.worktreeId, t.file]));
+  const liveIds = new Set(entries.map((e) => e.id));
+  for (const entry of entries) {
+    const file = ticketByWorktreeId.get(entry.id);
+    if (file?.primary || file?.related?.length) {
+      entry.ticket = {
+        ...(file.primary ? { primary: file.primary } : {}),
+        ...(file.related && file.related.length ? { related: file.related } : {}),
+      };
+    }
+  }
+
+  // Archive tickets whose worktrees no longer exist
+  for (const { worktreeId } of allTickets) {
+    if (!liveIds.has(worktreeId)) {
+      await ticketStore.archive(worktreeId);
+    }
+  }
+
+  // Aggregate status summary
   const summary = {
     ready_to_land: 0,
     needs_attention: 0,

@@ -1,5 +1,6 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { AgentManager } from "./core/agent-manager.js";
+import { orraAttachTicketSchema, handleOrraAttachTicket } from "./tools/orra-attach-ticket.js";
 import { orraScanSchema, handleOrraScan } from "./tools/orra-scan.js";
 import { orraInspectSchema, handleOrraInspect } from "./tools/orra-inspect.js";
 import { orraKillSchema, handleOrraKill } from "./tools/orra-kill.js";
@@ -48,6 +49,7 @@ export function createServer(projectRoot: string): { server: McpServer; manager:
   server.tool("orra_scan", "Scan all worktrees — accepts filter/fields for focused output.", orraScanSchema.shape, async (args) => gate(() => handleOrraScan(projectRoot, orraScanSchema.parse(args))));
   server.tool("orra_inspect", "Inspect worktree/session/cache. target:'worktree'|'session'|'cache', id, filter, fields, limit.", orraInspectSchema.shape, async (args) => gate(() => handleOrraInspect(projectRoot, orraInspectSchema.parse(args))));
   server.tool("orra_register", "Register an existing worktree with Orra.", orraRegisterSchema.shape, async (args) => gate(() => handleOrraRegister(projectRoot, orraRegisterSchema.parse(args))));
+  server.tool("orra_attach_ticket", "Attach a Symphony-normalized issue/ticket to a worktree. primary=true (default) sets the worktree's primary ticket; primary=false appends to related[]. source defaults to 'manual'; non-manual sources cannot overwrite a manual attachment.", orraAttachTicketSchema.shape, async (args) => gate(() => handleOrraAttachTicket(projectRoot, orraAttachTicketSchema.parse(args))));
   server.tool("orra_kill", "Stop tracked agent and optionally remove the worktree + close PR.", orraKillSchema.shape, async (args) => gate(() => handleOrraKill(manager, orraKillSchema.parse(args))));
   server.tool("orra_unblock", "Answer a pending permission prompt for an agent.", orraUnblockSchema.shape, async (args) => gate(() => handleOrraUnblock(projectRoot, orraUnblockSchema.parse(args))));
   server.tool("orra_rebase", "Rebase a worktree branch on latest main.", orraRebaseSchema.shape, async (args) => gate(() => handleOrraRebase(manager, projectRoot, orraRebaseSchema.parse(args))));

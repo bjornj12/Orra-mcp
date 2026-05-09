@@ -43,6 +43,26 @@ Orra is an MCP server that gives Claude Code three capabilities it doesn't have 
 - **Learning** — a markdown memory layer under `.orra/memory/`. Daily notes, commitments, per-worktree notes, and weekly retros persist across sessions. Directives like `morning-briefing` and `shutdown-ritual` maintain it for you.
 - **Side tasks** — `orra_spawn` launches detached `claude --print` agents in worktrees to handle routine maintenance (rebases, lint fixes, snapshot updates) while you focus on the work that actually needs you.
 
+## Ticket awareness
+
+Orra correlates open tickets to your worktrees so the orchestrator can speak in terms of *what's due*, not just *what worktrees exist*.
+
+There are two ways tickets get attached:
+
+1. **`orra_attach_ticket` (manual / Claude-driven)** — call from any orchestrator session to attach a ticket to a worktree:
+
+   > "Attach AUTH-142 to the auth-refactor worktree."
+
+   Manual attachments take precedence; automatic mechanisms cannot overwrite them.
+
+2. **`refresh-ticket-state` directive (automatic, hourly)** — installed as part of the directive pack. On a 1-hour cadence (and on session start), it calls your installed Linear/GitHub MCP, fetches active issues, and attaches them to matching worktrees by branch name or `[A-Z]+-\d+` regex.
+
+Tickets are stored at `.orra/tickets/{worktree}.json` in Symphony's normalized issue model. Run `orra_scan` to see attached tickets in scan output.
+
+If a worktree disappears, its ticket is moved to `.orra/tickets/_archived/` automatically.
+
+For headless / always-on Linear sync (a long-running daemon that polls Linear directly), see the upcoming Symphony backend (Plan 2). The directive is sufficient for everyone else.
+
 ## Quick start
 
 ### 1. Register the MCP server
@@ -172,6 +192,7 @@ Orra externalizes orchestrator state to `.orra/` so that `/compact` is survivabl
 | `orra_setup` | Scaffold `.orra/` + install orchestrator persona. Run once per project. |
 | `orra_directive` | Manage directives (add, list, remove, install shipped ones). |
 | `orra_spawn` | Spawn a detached headless agent for routine maintenance. |
+| `orra_attach_ticket` | Attach a Symphony-normalized issue/ticket to a worktree. Manual attachments take precedence over automatic sources. |
 
 ## Requirements
 

@@ -6,6 +6,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { isSafeWorktreeId } from "../core/validation.js";
 import { ok, fail, toMcpContent } from "../core/envelope.js";
+import { resolveWorktree } from "../core/worktree.js";
 
 const execFileAsync = promisify(execFile);
 const currentDir = path.dirname(fileURLToPath(import.meta.url));
@@ -129,24 +130,3 @@ export async function handleOrraRegister(
   }));
 }
 
-async function resolveWorktree(projectRoot: string, input: string): Promise<string | null> {
-  try {
-    const { stdout } = await execFileAsync("git", ["worktree", "list", "--porcelain"], { cwd: projectRoot });
-    const blocks = stdout.split("\n\n");
-    for (const block of blocks) {
-      const lines = block.trim().split("\n");
-      const worktreeLine = lines.find(l => l.startsWith("worktree "));
-      if (!worktreeLine) continue;
-      const wtPath = worktreeLine.replace("worktree ", "");
-      // Match by exact absolute path OR by basename (legacy ID form).
-      if (path.isAbsolute(input)) {
-        if (path.resolve(wtPath) === path.resolve(input)) {
-          return wtPath;
-        }
-      } else if (path.basename(wtPath) === input) {
-        return wtPath;
-      }
-    }
-  } catch {}
-  return null;
-}

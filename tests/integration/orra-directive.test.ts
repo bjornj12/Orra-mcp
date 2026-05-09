@@ -94,6 +94,7 @@ describe("orra_directive — examples", () => {
     const names = (data.examples as { name: string }[]).map((e) => e.name);
     expect(names).toContain("morning-briefing");
     expect(names).toContain("auto-remediator");
+    expect(names).toContain("refresh-ticket-state");
     expect(names).not.toContain("daily-focus");
   });
 });
