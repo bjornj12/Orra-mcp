@@ -446,10 +446,13 @@ export async function scanAll(projectRoot: string): Promise<ScanResult> {
     };
   }));
 
-  // Step 9: Attach tickets from TicketStore
+  // Attach stored tickets to scan entries; archive orphans
   const ticketStore = new TicketStore(projectRoot);
+  const allTickets = await ticketStore.list();
+  const ticketByWorktreeId = new Map(allTickets.map((t) => [t.worktreeId, t.file]));
+  const liveIds = new Set(entries.map((e) => e.id));
   for (const entry of entries) {
-    const file = await ticketStore.read(entry.id);
+    const file = ticketByWorktreeId.get(entry.id);
     if (file?.primary || file?.related?.length) {
       entry.ticket = {
         ...(file.primary ? { primary: file.primary } : {}),
@@ -458,16 +461,14 @@ export async function scanAll(projectRoot: string): Promise<ScanResult> {
     }
   }
 
-  // Step 9.5: Archive orphan tickets (worktrees that no longer exist)
-  const liveIds = new Set(entries.map((e) => e.id));
-  const allTickets = await ticketStore.list();
+  // Archive tickets whose worktrees no longer exist
   for (const { worktreeId } of allTickets) {
     if (!liveIds.has(worktreeId)) {
       await ticketStore.archive(worktreeId);
     }
   }
 
-  // Step 10: Build summary
+  // Aggregate status summary
   const summary = {
     ready_to_land: 0,
     needs_attention: 0,

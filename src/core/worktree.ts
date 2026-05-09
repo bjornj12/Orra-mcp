@@ -4,6 +4,32 @@ import * as path from "node:path";
 
 const execFileAsync = promisify(execFile);
 
+/**
+ * Resolve a worktree input (absolute path OR basename ID) against the live
+ * git worktree list. Returns the resolved absolute path, or null if not found.
+ */
+export async function resolveWorktree(projectRoot: string, input: string): Promise<string | null> {
+  try {
+    const { stdout } = await execFileAsync("git", ["worktree", "list", "--porcelain"], { cwd: projectRoot });
+    const blocks = stdout.split("\n\n");
+    for (const block of blocks) {
+      const lines = block.trim().split("\n");
+      const worktreeLine = lines.find(l => l.startsWith("worktree "));
+      if (!worktreeLine) continue;
+      const wtPath = worktreeLine.replace("worktree ", "");
+      // Match by exact absolute path OR by basename (legacy ID form).
+      if (path.isAbsolute(input)) {
+        if (path.resolve(wtPath) === path.resolve(input)) {
+          return wtPath;
+        }
+      } else if (path.basename(wtPath) === input) {
+        return wtPath;
+      }
+    }
+  } catch {}
+  return null;
+}
+
 export function slugify(input: string): string {
   return input
     .toLowerCase()

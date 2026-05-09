@@ -148,6 +148,22 @@ describe("orra_attach_ticket — primary vs related", () => {
     expect(env.ok).toBe(false);
     expect(env.error).toMatch(/no primary/i);
   });
+
+  it("preserves source and manual from existing primary when writing related", async () => {
+    await handleOrraAttachTicket(tmpRoot, parse({
+      worktree: "auth-refactor",
+      ticket: { id: "uuid-1", identifier: "AUTH-142" },
+    }));
+    await handleOrraAttachTicket(tmpRoot, parse({
+      worktree: "auth-refactor",
+      ticket: { id: "uuid-2", identifier: "AUTH-150" },
+      primary: false,
+      source: "directive",
+    }));
+    const file = await new TicketStore(tmpRoot).read("auth-refactor");
+    expect(file?.source).toBe("manual");
+    expect(file?.manual).toBe(true);
+  });
 });
 
 describe("orra_attach_ticket — manual flag protection", () => {

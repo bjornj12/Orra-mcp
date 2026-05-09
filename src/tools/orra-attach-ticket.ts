@@ -1,24 +1,9 @@
 import { z } from "zod";
-import { execFile } from "node:child_process";
-import { promisify } from "node:util";
 import { ok, fail, toMcpContent } from "../core/envelope.js";
 import { SafeWorktreeIdSchema } from "../core/validation.js";
 import { NormalizedIssueSchema } from "../core/types/normalized-issue.js";
 import { TicketStore } from "../core/ticket-store.js";
-
-const execFileAsync = promisify(execFile);
-
-async function worktreeExists(projectRoot: string, worktreeId: string): Promise<boolean> {
-  try {
-    const { stdout } = await execFileAsync("git", ["worktree", "list", "--porcelain"], { cwd: projectRoot });
-    const paths = stdout.split("\n")
-      .filter((line) => line.startsWith("worktree "))
-      .map((line) => line.slice("worktree ".length));
-    return paths.some((p) => p.split("/").pop() === worktreeId);
-  } catch {
-    return false;
-  }
-}
+import { resolveWorktree } from "../core/worktree.js";
 
 export const orraAttachTicketSchema = z.object({
   worktree: SafeWorktreeIdSchema.describe("Worktree ID (directory name) to attach the ticket to"),
@@ -28,9 +13,9 @@ export const orraAttachTicketSchema = z.object({
     .default(true)
     .describe("Whether this ticket is the primary one for the worktree (default true). false = append to related[]."),
   source: z
-    .string()
+    .enum(["manual", "directive", "linear-provider"])
     .default("manual")
-    .describe("Origin of this attachment: 'manual' (user/Claude), 'directive', or 'linear-provider'"),
+    .describe("Origin of this attachment"),
 });
 
 export async function handleOrraAttachTicket(
@@ -39,7 +24,7 @@ export async function handleOrraAttachTicket(
 ) {
   const { worktree, ticket, primary, source } = args;
 
-  if (!(await worktreeExists(projectRoot, worktree))) {
+  if (!(await resolveWorktree(projectRoot, worktree))) {
     return toMcpContent(fail(
       `Worktree "${worktree}" is not a registered git worktree in this project. Run 'git worktree list' to see available worktrees.`,
     ));
@@ -75,7 +60,7 @@ export async function handleOrraAttachTicket(
   await store.write(worktree, {
     primary: existing.primary,
     related: filtered,
-    source,
+    source: existing.source,   // preserve: source/manual describe the primary
     manual: existing.manual,
   });
   return toMcpContent(ok({ worktree, identifier: ticket.identifier, primary: false }));

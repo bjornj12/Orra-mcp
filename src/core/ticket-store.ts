@@ -3,12 +3,14 @@ import * as path from "node:path";
 import { atomicWriteFile } from "./atomic-write.js";
 import type { NormalizedIssue } from "./types/normalized-issue.js";
 
+export type TicketSource = "manual" | "directive" | "linear-provider";
+
 export interface TicketFile {
   worktree: string;
   primary?: NormalizedIssue;
   related?: NormalizedIssue[];
   manual?: boolean;
-  source: string;
+  source: TicketSource;
   synced_at: string;
 }
 
@@ -16,7 +18,7 @@ export interface WriteInput {
   primary?: NormalizedIssue;
   related?: NormalizedIssue[];
   manual?: boolean;
-  source: string;
+  source: TicketSource;
 }
 
 const SAFE_CHAR = /[A-Za-z0-9._-]/;
