@@ -9,7 +9,7 @@ describe("isSafeWorktreeId", () => {
     expect(isSafeWorktreeId("abc123")).toBe(true);
   });
 
-  it("accepts IDs with the random suffix produced by agent-manager", () => {
+  it("accepts IDs with hyphens and digit suffixes", () => {
     expect(isSafeWorktreeId("rebase-onto-main-ab3c")).toBe(true);
     expect(isSafeWorktreeId("headless-0000")).toBe(true);
   });

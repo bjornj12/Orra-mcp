@@ -27,7 +27,6 @@ export const ConfigSchema = z.object({
   defaultAgent: z.string().nullable().default(null),
   providers: z.array(ProviderConfigSchema).default([]),
   providerCache: ProviderCacheConfigSchema.default({ ttl: 5000 }),
-  headlessSpawnConcurrency: z.number().int().min(0).default(3),
 });
 export type Config = z.infer<typeof ConfigSchema>;
 
@@ -58,13 +57,6 @@ export const WorktreeStatusSchema = z.enum([
 ]);
 export type WorktreeStatus = z.infer<typeof WorktreeStatusSchema>;
 
-// PendingQuestion is retained for now because classify() and summary.ts still reference it.
-// It will be fully removed in a later task when those callers are updated.
-export const PendingQuestionSchema = z.object({
-  tool: z.string(),
-  input: z.record(z.string(), z.unknown()),
-});
-export type PendingQuestion = z.infer<typeof PendingQuestionSchema>;
 
 export const AgentStateSchema = z.object({
   id: z.string(),
