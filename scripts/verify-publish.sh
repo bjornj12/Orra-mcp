@@ -30,7 +30,7 @@ npm init -y >/dev/null
 npm install --silent "$TARBALL"
 
 echo "==> bin executable check (catches missing chmod +x in tarball)"
-for bin in orra-mcp orra-setup; do
+for bin in orra-mcp orra-setup orra; do
   REAL_PATH="$(readlink -f ./node_modules/.bin/$bin 2>/dev/null || readlink ./node_modules/.bin/$bin)"
   REAL_PATH="${REAL_PATH:-./node_modules/.bin/$bin}"
   # Resolve relative readlink targets against bin dir
@@ -44,6 +44,17 @@ for bin in orra-mcp orra-setup; do
   fi
   echo "  $bin → $REAL_PATH ✓"
 done
+
+echo "==> orra --check (invoke bin, confirm dry-run output)"
+ORRA_CHECK="$(node ./node_modules/.bin/orra --check 2>&1)"
+if echo "$ORRA_CHECK" | grep -q '"action"'; then
+  echo "  orra --check printed action JSON ✓"
+else
+  echo "  FAIL: orra --check did not print expected JSON"
+  echo "  --- output ---"
+  echo "$ORRA_CHECK"
+  exit 1
+fi
 
 echo "==> boot check (invoke bin via npx, wait for marker, kill)"
 BOOT_LOG="$SCRATCH/boot.log"
