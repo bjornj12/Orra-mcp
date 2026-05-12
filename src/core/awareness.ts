@@ -16,6 +16,7 @@ import type { ProviderWorktree, StageInfo } from "./providers/types.js";
 import { createClaudeDaemonProvider } from "./providers/claude-daemon.js";
 import { loadPipeline, detectStage } from "./pipeline.js";
 import { getOrComputeSummary } from "./summary.js";
+import { parseTranscript } from "./log-parser.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -420,13 +421,19 @@ export async function scanAll(projectRoot: string): Promise<ScanResult> {
   }
 
   // Step 8: Compute per-agent summary, then classify
-  const orraAgentsDir = path.join(projectRoot, ".orra", "agents");
+  const agentsSummaryDir = path.join(projectRoot, ".orra", "agents-summary");
   const now = () => new Date();
 
   const entries: WorktreeScanEntry[] = await Promise.all(enriched.map(async (wt) => {
+    const transcriptPath = typeof wt.extras?.linkScanPath === "string"
+      ? wt.extras.linkScanPath
+      : "";
     const summary = wt.agent
-      ? await getOrComputeSummary(wt.agent.id, wt.agent, { stateDir: orraAgentsDir, now })
-          .catch(() => undefined)
+      ? await getOrComputeSummary(wt.agent.id, wt.agent, {
+          transcriptPath,
+          stateDir: agentsSummaryDir,
+          now,
+        }).catch(() => undefined)
       : undefined;
 
     const { status, flags } = classify(
@@ -512,18 +519,12 @@ export async function inspectOne(
     }
   }
 
-  // Agent output tail: read from the daemon transcript jsonl (linkScanPath).
-  // A later task adds proper JSONL transcript parsing; raw tail is acceptable for now.
+  // Agent output tail: parse the daemon transcript jsonl (linkScanPath).
   let agentOutputTail = "";
   const linkScanPath = entry.extras?.linkScanPath;
   if (typeof linkScanPath === "string" && linkScanPath) {
-    try {
-      const content = await fs.readFile(linkScanPath, "utf-8");
-      const lines = content.split("\n").filter((l) => l.trim().length > 0);
-      agentOutputTail = lines.slice(-50).join("\n");
-    } catch {
-      agentOutputTail = "";
-    }
+    const parsed = await parseTranscript(linkScanPath);
+    agentOutputTail = parsed.tailLines.join("\n");
   }
 
   // Conflict files (modified in both branch and main since merge-base)

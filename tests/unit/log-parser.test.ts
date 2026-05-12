@@ -1,13 +1,23 @@
 import { describe, it, expect } from "vitest";
-import { stripAnsi, parseLog } from "../../src/core/log-parser.js";
+import * as path from "node:path";
+import * as url from "node:url";
+import { stripAnsi, parseTranscript, parseTranscriptLines } from "../../src/core/log-parser.js";
+
+const FIXTURES_DIR = path.join(
+  path.dirname(url.fileURLToPath(import.meta.url)),
+  "..",
+  "fixtures",
+);
+
+const SAMPLE_FIXTURE = path.join(FIXTURES_DIR, "transcript-sample.jsonl");
 
 describe("stripAnsi", () => {
   it("removes CSI color codes", () => {
-    expect(stripAnsi("\u001b[31mred\u001b[0m")).toBe("red");
+    expect(stripAnsi("[31mred[0m")).toBe("red");
   });
 
   it("removes bold and underline", () => {
-    expect(stripAnsi("\u001b[1mbold\u001b[22m \u001b[4munder\u001b[24m")).toBe("bold under");
+    expect(stripAnsi("[1mbold[22m [4munder[24m")).toBe("bold under");
   });
 
   it("leaves plain text untouched", () => {
@@ -15,149 +25,276 @@ describe("stripAnsi", () => {
   });
 
   it("handles mixed content", () => {
-    expect(stripAnsi("prefix \u001b[32mgreen\u001b[0m suffix")).toBe("prefix green suffix");
+    expect(stripAnsi("prefix [32mgreen[0m suffix")).toBe("prefix green suffix");
   });
 });
 
-describe("parseLog — empty input", () => {
-  it("returns an empty-signals shape on empty string", () => {
-    const result = parseLog("");
+describe("parseTranscriptLines — empty / malformed input", () => {
+  it("returns empty-signals shape on empty array", () => {
+    const result = parseTranscriptLines([]);
     expect(result).toEqual({
       lastFileEdited: null,
       lastTestResult: "unknown",
       errorPattern: null,
       loopDetected: false,
       tailLines: [],
+      lastActivityAt: null,
     });
   });
 
-  it("returns empty-signals shape on whitespace-only input", () => {
-    const result = parseLog("   \n\n   \n");
+  it("skips blank lines and parse errors gracefully", () => {
+    const result = parseTranscriptLines(["", "not json at all", "  "]);
     expect(result.tailLines).toEqual([]);
     expect(result.lastTestResult).toBe("unknown");
   });
 });
 
-describe("parseLog — lastTestResult", () => {
-  it("detects PASS from 'Tests: 3 passed'", () => {
-    const log = "running jest\nTests:       3 passed, 3 total\nDone in 1.2s";
-    expect(parseLog(log).lastTestResult).toBe("pass");
+describe("parseTranscriptLines — lastTestResult", () => {
+  const testResultLine = JSON.stringify({
+    type: "user",
+    message: {
+      role: "user",
+      content: [{ type: "tool_result", tool_use_id: "t1", content: "Tests: 3 passed, 3 total" }],
+    },
+    timestamp: "2026-05-12T10:00:00.000Z",
   });
 
-  it("detects FAIL from 'Tests: 1 failed'", () => {
-    const log = "running jest\nTests:       2 passed, 1 failed, 3 total";
-    expect(parseLog(log).lastTestResult).toBe("fail");
+  const testFailLine = JSON.stringify({
+    type: "user",
+    message: {
+      role: "user",
+      content: [{ type: "tool_result", tool_use_id: "t1", content: "Tests: 1 failed, 1 passed, 2 total" }],
+    },
+    timestamp: "2026-05-12T10:00:00.000Z",
   });
 
-  it("detects PASS from ✓ marker", () => {
-    const log = "✓ should do the thing\n✓ should do another thing";
-    expect(parseLog(log).lastTestResult).toBe("pass");
+  it("detects pass from tool_result containing 'Tests: N passed'", () => {
+    expect(parseTranscriptLines([testResultLine]).lastTestResult).toBe("pass");
   });
 
-  it("detects FAIL from ✗ marker", () => {
-    const log = "✓ should do the thing\n✗ should do another thing\n  Error: expected 2 got 3";
-    expect(parseLog(log).lastTestResult).toBe("fail");
-  });
-
-  it("detects PASS from 'N passing' (mocha style)", () => {
-    expect(parseLog("  5 passing (120ms)").lastTestResult).toBe("pass");
-  });
-
-  it("detects FAIL from 'N failing'", () => {
-    expect(parseLog("  3 passing\n  1 failing").lastTestResult).toBe("fail");
+  it("detects fail from tool_result containing 'Tests: N failed'", () => {
+    expect(parseTranscriptLines([testFailLine]).lastTestResult).toBe("fail");
   });
 
   it("most recent signal wins (fail after pass)", () => {
-    const log = "Tests: 3 passed\n... edit ...\nTests: 1 failed";
-    expect(parseLog(log).lastTestResult).toBe("fail");
+    expect(parseTranscriptLines([testResultLine, testFailLine]).lastTestResult).toBe("fail");
   });
 
-  it("strips ANSI before matching", () => {
-    const log = "\u001b[32m✓\u001b[0m should work";
-    expect(parseLog(log).lastTestResult).toBe("pass");
-  });
-
-  it("returns 'unknown' when no test signals present", () => {
-    expect(parseLog("building...\ndone").lastTestResult).toBe("unknown");
-  });
-
-  it("returns 'pass' for Jest summary with 0 failed", () => {
-    expect(parseLog("Tests:       3 passed, 0 failed, 3 total").lastTestResult).toBe("pass");
-  });
-
-  it("returns 'pass' for mocha summary with 0 failing", () => {
-    expect(parseLog("  5 passing (120ms)\n  0 failing").lastTestResult).toBe("pass");
+  it("returns unknown when no test signals present", () => {
+    const plain = JSON.stringify({
+      type: "assistant",
+      message: { role: "assistant", content: [{ type: "text", text: "building..." }] },
+      timestamp: "2026-05-12T10:00:00.000Z",
+    });
+    expect(parseTranscriptLines([plain]).lastTestResult).toBe("unknown");
   });
 });
 
-describe("parseLog — lastFileEdited", () => {
-  it("picks up 'modified: <path>'", () => {
-    expect(parseLog("modified: src/foo.ts").lastFileEdited).toBe("src/foo.ts");
+describe("parseTranscriptLines — lastFileEdited", () => {
+  it("picks up file_path from Edit tool_use", () => {
+    const line = JSON.stringify({
+      type: "assistant",
+      message: {
+        role: "assistant",
+        content: [{ type: "tool_use", id: "t1", name: "Edit", input: { file_path: "src/bar.ts" } }],
+      },
+      timestamp: "2026-05-12T10:00:00.000Z",
+    });
+    expect(parseTranscriptLines([line]).lastFileEdited).toBe("src/bar.ts");
   });
 
-  it("picks up 'edited: <path>'", () => {
-    expect(parseLog("edited: lib/bar.ts").lastFileEdited).toBe("lib/bar.ts");
-  });
-
-  it("picks up 'wrote <path>'", () => {
-    expect(parseLog("wrote README.md").lastFileEdited).toBe("README.md");
+  it("picks up file_path from Write tool_use", () => {
+    const line = JSON.stringify({
+      type: "assistant",
+      message: {
+        role: "assistant",
+        content: [{ type: "tool_use", id: "t1", name: "Write", input: { file_path: "README.md" } }],
+      },
+      timestamp: "2026-05-12T10:00:00.000Z",
+    });
+    expect(parseTranscriptLines([line]).lastFileEdited).toBe("README.md");
   });
 
   it("most recent match wins", () => {
-    const log = "modified: src/a.ts\nbuilding\nmodified: src/b.ts";
-    expect(parseLog(log).lastFileEdited).toBe("src/b.ts");
+    const line1 = JSON.stringify({
+      type: "assistant",
+      message: {
+        role: "assistant",
+        content: [{ type: "tool_use", id: "t1", name: "Edit", input: { file_path: "src/a.ts" } }],
+      },
+      timestamp: "2026-05-12T10:00:00.000Z",
+    });
+    const line2 = JSON.stringify({
+      type: "assistant",
+      message: {
+        role: "assistant",
+        content: [{ type: "tool_use", id: "t2", name: "Edit", input: { file_path: "src/b.ts" } }],
+      },
+      timestamp: "2026-05-12T10:00:01.000Z",
+    });
+    expect(parseTranscriptLines([line1, line2]).lastFileEdited).toBe("src/b.ts");
   });
 
-  it("null when no match", () => {
-    expect(parseLog("hello world").lastFileEdited).toBeNull();
-  });
-});
-
-describe("parseLog — errorPattern", () => {
-  it("detects ENOENT family", () => {
-    expect(parseLog("Error: ENOENT: no such file").errorPattern).toBe("ENOENT");
-  });
-
-  it("detects ECONNREFUSED family", () => {
-    expect(parseLog("connect ECONNREFUSED 127.0.0.1:3000").errorPattern).toBe("ECONNREFUSED");
-  });
-
-  it("detects command not found", () => {
-    expect(parseLog("/bin/sh: foo: command not found").errorPattern).toBe("command_not_found");
-  });
-
-  it("detects permission denied", () => {
-    expect(parseLog("bash: /etc/hosts: Permission denied").errorPattern).toBe("permission_denied");
-  });
-
-  it("detects timeout", () => {
-    expect(parseLog("Request timed out after 30s").errorPattern).toBe("timeout");
-  });
-
-  it("null when no error", () => {
-    expect(parseLog("everything is fine").errorPattern).toBeNull();
+  it("returns null when no file edits", () => {
+    const line = JSON.stringify({
+      type: "assistant",
+      message: { role: "assistant", content: [{ type: "text", text: "hello" }] },
+      timestamp: "2026-05-12T10:00:00.000Z",
+    });
+    expect(parseTranscriptLines([line]).lastFileEdited).toBeNull();
   });
 });
 
-describe("parseLog — loopDetected", () => {
-  it("true when one line repeats 3x in tail", () => {
-    const log = Array(22).fill("unique").concat(["same", "same", "same"]).join("\n");
-    expect(parseLog(log).loopDetected).toBe(true);
+describe("parseTranscriptLines — lastActivityAt", () => {
+  it("returns the timestamp of the last line with a timestamp", () => {
+    const lines = [
+      JSON.stringify({ type: "user", message: { role: "user", content: "hi" }, timestamp: "2026-05-12T10:00:00.000Z" }),
+      JSON.stringify({ type: "assistant", message: { role: "assistant", content: [{ type: "text", text: "ok" }] }, timestamp: "2026-05-12T10:00:01.000Z" }),
+    ];
+    expect(parseTranscriptLines(lines).lastActivityAt).toBe("2026-05-12T10:00:01.000Z");
   });
 
-  it("false when no repetition", () => {
-    const log = Array.from({ length: 20 }, (_, i) => `line-${i}`).join("\n");
-    expect(parseLog(log).loopDetected).toBe(false);
+  it("returns null when no timestamps present", () => {
+    const line = JSON.stringify({ type: "assistant", message: { role: "assistant", content: [] } });
+    expect(parseTranscriptLines([line]).lastActivityAt).toBeNull();
+  });
+});
+
+describe("parseTranscriptLines — tailLines rendering", () => {
+  it("renders assistant text blocks as-is", () => {
+    const line = JSON.stringify({
+      type: "assistant",
+      message: { role: "assistant", content: [{ type: "text", text: "Hello world" }] },
+      timestamp: "2026-05-12T10:00:00.000Z",
+    });
+    const result = parseTranscriptLines([line]);
+    expect(result.tailLines).toContain("Hello world");
   });
 
-  it("false when repetition is below threshold (2x)", () => {
-    const log = "a\nb\na\nb\nc\nd".split("").join("\n");
-    expect(parseLog(log).loopDetected).toBe(false);
+  it("renders Bash tool_use as '$ <command>'", () => {
+    const line = JSON.stringify({
+      type: "assistant",
+      message: {
+        role: "assistant",
+        content: [{ type: "tool_use", id: "t1", name: "Bash", input: { command: "npm test" } }],
+      },
+      timestamp: "2026-05-12T10:00:00.000Z",
+    });
+    const result = parseTranscriptLines([line]);
+    expect(result.tailLines.some((l) => l.startsWith("$ npm test"))).toBe(true);
   });
 
-  it("only counts within last 20 non-blank lines", () => {
-    // 3 repeats far in the past, not in tail
-    const log = ["x", "x", "x", ...Array.from({ length: 25 }, (_, i) => `line-${i}`)].join("\n");
-    expect(parseLog(log).loopDetected).toBe(false);
+  it("renders tool_result as '⎿ <first line>...'", () => {
+    const line = JSON.stringify({
+      type: "user",
+      message: {
+        role: "user",
+        content: [{ type: "tool_result", tool_use_id: "t1", content: "line1\nline2" }],
+      },
+      timestamp: "2026-05-12T10:00:00.000Z",
+    });
+    const result = parseTranscriptLines([line]);
+    expect(result.tailLines.some((l) => l.startsWith("⎿ line1"))).toBe(true);
+  });
+
+  it("renders Edit tool_use as '✎ <path>'", () => {
+    const line = JSON.stringify({
+      type: "assistant",
+      message: {
+        role: "assistant",
+        content: [{ type: "tool_use", id: "t1", name: "Edit", input: { file_path: "src/foo.ts" } }],
+      },
+      timestamp: "2026-05-12T10:00:00.000Z",
+    });
+    const result = parseTranscriptLines([line]);
+    expect(result.tailLines.some((l) => l.startsWith("✎ src/foo.ts"))).toBe(true);
+  });
+
+  it("keeps only the last 50 rendered lines", () => {
+    const lines: string[] = [];
+    for (let i = 0; i < 60; i++) {
+      lines.push(JSON.stringify({
+        type: "assistant",
+        message: { role: "assistant", content: [{ type: "text", text: `line ${i}` }] },
+        timestamp: "2026-05-12T10:00:00.000Z",
+      }));
+    }
+    const result = parseTranscriptLines(lines);
+    expect(result.tailLines.length).toBe(50);
+    // Should have the last 50 lines (10..59)
+    expect(result.tailLines[0]).toBe("line 10");
+    expect(result.tailLines[49]).toBe("line 59");
+  });
+});
+
+describe("parseTranscriptLines — loopDetected", () => {
+  it("detects loop when same tailLine repeats 3+ times in the tail", () => {
+    const lines: string[] = [];
+    // Add 25 unique lines first
+    for (let i = 0; i < 25; i++) {
+      lines.push(JSON.stringify({
+        type: "assistant",
+        message: { role: "assistant", content: [{ type: "text", text: `unique-${i}` }] },
+        timestamp: "2026-05-12T10:00:00.000Z",
+      }));
+    }
+    // Then add 3 repeating lines
+    for (let i = 0; i < 3; i++) {
+      lines.push(JSON.stringify({
+        type: "assistant",
+        message: { role: "assistant", content: [{ type: "text", text: "repeating line" }] },
+        timestamp: "2026-05-12T10:00:00.000Z",
+      }));
+    }
+    expect(parseTranscriptLines(lines).loopDetected).toBe(true);
+  });
+
+  it("does not detect loop with unique lines", () => {
+    const lines = Array.from({ length: 20 }, (_, i) =>
+      JSON.stringify({
+        type: "assistant",
+        message: { role: "assistant", content: [{ type: "text", text: `unique-line-${i}` }] },
+        timestamp: "2026-05-12T10:00:00.000Z",
+      }),
+    );
+    expect(parseTranscriptLines(lines).loopDetected).toBe(false);
+  });
+});
+
+describe("parseTranscript — reads from fixture file", () => {
+  it("returns lastTestResult=pass from the sample fixture", async () => {
+    const result = await parseTranscript(SAMPLE_FIXTURE);
+    expect(result.lastTestResult).toBe("pass");
+  });
+
+  it("returns lastFileEdited=src/foo.ts from the sample fixture", async () => {
+    const result = await parseTranscript(SAMPLE_FIXTURE);
+    expect(result.lastFileEdited).toBe("src/foo.ts");
+  });
+
+  it("returns non-empty tailLines from the sample fixture", async () => {
+    const result = await parseTranscript(SAMPLE_FIXTURE);
+    expect(result.tailLines.length).toBeGreaterThan(0);
+  });
+
+  it("tailLines includes the rendered Bash command", async () => {
+    const result = await parseTranscript(SAMPLE_FIXTURE);
+    expect(result.tailLines.some((l) => l.includes("npm test"))).toBe(true);
+  });
+
+  it("tailLines includes a rendered Edit tool turn", async () => {
+    const result = await parseTranscript(SAMPLE_FIXTURE);
+    expect(result.tailLines.some((l) => l.includes("src/foo.ts"))).toBe(true);
+  });
+
+  it("returns lastActivityAt from the last timestamp in the fixture", async () => {
+    const result = await parseTranscript(SAMPLE_FIXTURE);
+    expect(result.lastActivityAt).toBe("2026-05-12T10:00:09.000Z");
+  });
+
+  it("returns null when the file does not exist", async () => {
+    const result = await parseTranscript("/no/such/file.jsonl");
+    expect(result.lastTestResult).toBe("unknown");
+    expect(result.tailLines).toEqual([]);
   });
 });

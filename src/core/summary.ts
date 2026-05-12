@@ -1,42 +1,23 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { parseLog, type LogSignals } from "./log-parser.js";
+import { parseTranscript, type LogSignals } from "./log-parser.js";
 import type { AgentState, AgentSummary } from "../types.js";
 
 export const CURRENT_SUMMARY_SCHEMA_VERSION = 1 as const;
-export const MAX_TAIL_BYTES = 64 * 1024;
 
 export interface SummaryComputeDeps {
+  /** Path to the Claude Code session transcript `.jsonl` file. */
+  transcriptPath: string;
+  /**
+   * Directory where summary cache files are written.
+   * Typically `<projectRoot>/.orra/agents-summary/`.
+   */
   stateDir: string;
   now: () => Date;
 }
 
-function logPath(stateDir: string, agentId: string): string {
-  return path.join(stateDir, `${agentId}.log`);
-}
-
 function summaryPath(stateDir: string, agentId: string): string {
   return path.join(stateDir, `${agentId}.summary.json`);
-}
-
-export async function readLogTail(file: string): Promise<{ text: string; mtime: Date } | null> {
-  let stat;
-  try {
-    stat = await fs.stat(file);
-  } catch {
-    return null;
-  }
-  const size = stat.size;
-  const start = Math.max(0, size - MAX_TAIL_BYTES);
-  const handle = await fs.open(file, "r");
-  try {
-    const length = size - start;
-    const buffer = Buffer.alloc(length);
-    await handle.read(buffer, 0, length, start);
-    return { text: buffer.toString("utf-8"), mtime: stat.mtime };
-  } finally {
-    await handle.close();
-  }
 }
 
 function buildOneLine(agent: AgentState, signals: LogSignals): string {
@@ -48,6 +29,8 @@ function buildOneLine(agent: AgentState, signals: LogSignals): string {
   if (signals.lastTestResult === "pass") return "last test run passed";
   if (signals.lastFileEdited) return `editing ${signals.lastFileEdited}`;
   if (signals.tailLines.length > 0) return signals.tailLines[signals.tailLines.length - 1].slice(0, 120);
+  // Fallback: use daemon detail field if available
+  if (agent.detail) return agent.detail;
   return `agent status: ${agent.status}`;
 }
 
@@ -114,9 +97,9 @@ async function tryReadCachedSummary(
   }
 }
 
-async function currentLogMtime(stateDir: string, agentId: string): Promise<string | null> {
+async function currentTranscriptMtime(transcriptPath: string): Promise<string | null> {
   try {
-    const s = await fs.stat(logPath(stateDir, agentId));
+    const s = await fs.stat(transcriptPath);
     return s.mtime.toISOString();
   } catch {
     return null;
@@ -135,35 +118,39 @@ async function computeFresh(
   agent: AgentState,
   deps: SummaryComputeDeps,
 ): Promise<AgentSummary> {
-  const logFile = logPath(deps.stateDir, agentId);
-  const tail = await readLogTail(logFile);
+  const signals: LogSignals = await parseTranscript(deps.transcriptPath);
 
-  const signals: LogSignals = tail
-    ? parseLog(tail.text)
-    : {
-        lastFileEdited: null,
-        lastTestResult: "unknown",
-        errorPattern: null,
-        loopDetected: false,
-        tailLines: [],
-      };
+  // Use lastActivityAt from transcript if available; fall back to transcript mtime
+  let lastActivityAt: string | null = signals.lastActivityAt;
+  if (!lastActivityAt) {
+    try {
+      const s = await fs.stat(deps.transcriptPath);
+      lastActivityAt = s.mtime.toISOString();
+    } catch {
+      lastActivityAt = null;
+    }
+  }
 
   const now = deps.now();
+  const mtime = await currentTranscriptMtime(deps.transcriptPath);
+
   const summary: AgentSummary = {
     agentId,
     summarizedAt: now.toISOString(),
-    logMtime: tail ? tail.mtime.toISOString() : "",
+    logMtime: mtime ?? "",
     schemaVersion: CURRENT_SUMMARY_SCHEMA_VERSION,
     oneLine: buildOneLine(agent, signals),
     needsAttentionScore: scoreSummary(agent, signals, now),
     likelyStuckReason: deriveStuckReason(agent, signals, now),
     lastTestResult: signals.lastTestResult,
     lastFileEdited: signals.lastFileEdited,
-    lastActivityAt: tail ? tail.mtime.toISOString() : null,
+    lastActivityAt,
     tailLines: signals.tailLines,
   };
 
+  // Ensure the stateDir exists before writing
   try {
+    await fs.mkdir(deps.stateDir, { recursive: true });
     await writeSummaryAtomic(summaryPath(deps.stateDir, agentId), summary);
   } catch {
     // Disk full / permissions — return the in-memory summary anyway.
@@ -179,7 +166,7 @@ export async function getOrComputeSummary(
 ): Promise<AgentSummary> {
   const [cached, mtime] = await Promise.all([
     tryReadCachedSummary(deps.stateDir, agentId),
-    currentLogMtime(deps.stateDir, agentId),
+    currentTranscriptMtime(deps.transcriptPath),
   ]);
 
   if (cached && mtime && cached.logMtime === mtime) {

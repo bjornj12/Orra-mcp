@@ -40,6 +40,32 @@ beforeEach(async () => {
   prevConfigDir = process.env.CLAUDE_CONFIG_DIR;
   process.env.CLAUDE_CONFIG_DIR = fakeConfigDir;
 
+  // Create a transcript JSONL in a projects directory under fakeConfigDir
+  const projectsDir = path.join(fakeConfigDir, "projects", "test-project");
+  await fs.mkdir(projectsDir, { recursive: true });
+  const transcriptPath = path.join(projectsDir, `${setup.worktreeId}-session.jsonl`);
+
+  // Write transcript with test signals
+  const transcriptContent = [
+    JSON.stringify({
+      type: "assistant",
+      message: {
+        role: "assistant",
+        content: [{ type: "tool_use", id: "t1", name: "Edit", input: { file_path: "src/foo.ts" } }],
+      },
+      timestamp: "2026-05-12T10:00:00.000Z",
+    }),
+    JSON.stringify({
+      type: "user",
+      message: {
+        role: "user",
+        content: [{ type: "tool_result", tool_use_id: "t1", content: "Tests: 1 failed, 2 total" }],
+      },
+      timestamp: "2026-05-12T10:00:01.000Z",
+    }),
+  ].join("\n");
+  await fs.writeFile(transcriptPath, transcriptContent);
+
   const jobDir = path.join(fakeConfigDir, "jobs", setup.worktreeId);
   await fs.mkdir(jobDir, { recursive: true });
   await fs.writeFile(path.join(jobDir, "state.json"), JSON.stringify({
@@ -55,18 +81,11 @@ beforeEach(async () => {
     daemonShort: setup.worktreeId,
     worktreePath: setup.worktreeDir,
     cwd: setup.worktreeDir,
+    linkScanPath: transcriptPath,
     backend: "daemon",
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
   }));
-
-  // Write the .log file that summary.ts reads (summary reads from .orra/agents/<id>.log)
-  const agentsDir = path.join(repoDir, ".orra", "agents");
-  await fs.mkdir(agentsDir, { recursive: true });
-  await fs.writeFile(
-    path.join(agentsDir, `${setup.worktreeId}.log`),
-    "starting work\nmodified: src/foo.ts\nTests: 1 failed",
-  );
 });
 
 afterEach(async () => {
