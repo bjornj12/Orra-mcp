@@ -14,6 +14,8 @@
  */
 
 import { spawnSync } from "node:child_process";
+import { realpathSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { readJobs, configDir } from "../core/daemon-state.js";
 import { buildBgArgs } from "../core/claude-cli.js";
 import type { JobState } from "../core/daemon-state.js";
@@ -116,10 +118,19 @@ async function main(): Promise<void> {
 }
 
 // Only run when this file is the entry point (not when imported by tests).
-if (
-  import.meta.url ===
-  `file://${process.argv[1]}`
-) {
+// Compare real paths so symlinked bin entries (node_modules/.bin/orra →
+// dist/bin/orra-launch.js) are recognised correctly.
+function isEntryPoint(): boolean {
+  try {
+    const thisFile = realpathSync(fileURLToPath(import.meta.url));
+    const argv1 = realpathSync(process.argv[1]);
+    return thisFile === argv1;
+  } catch {
+    return false;
+  }
+}
+
+if (isEntryPoint()) {
   main().catch((err) => {
     console.error("orra:", err instanceof Error ? err.message : String(err));
     process.exit(1);
