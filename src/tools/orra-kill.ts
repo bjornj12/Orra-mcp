@@ -4,6 +4,7 @@ import { readJobs, configDir } from "../core/daemon-state.js";
 import { readSpawnLedger } from "../core/state.js";
 import { isSafeBranchName } from "../core/validation.js";
 import { ok, fail, toMcpContent } from "../core/envelope.js";
+import { checkAgentsViewAvailable } from "../core/agents-view-preflight.js";
 
 export const orraKillSchema = z.object({
   agent: z.string().min(1).describe("Short id (8 hex chars), slug, or session name of the agent to stop."),
@@ -48,6 +49,11 @@ export async function handleOrraKill(
   projectRoot: string,
   args: z.infer<typeof orraKillSchema>,
 ) {
+  const pf = await checkAgentsViewAvailable();
+  if (!pf.ok) {
+    return toMcpContent(fail(pf.reason, { code: "agents_view_unavailable" }));
+  }
+
   try {
     const shortId = await resolveShortId(projectRoot, args.agent);
     if (!shortId) {

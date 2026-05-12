@@ -7,6 +7,7 @@ import { recordSpawn } from "../core/state.js";
 import { loadConfig } from "../core/config.js";
 import { slugify } from "../core/slug.js";
 import { ok, fail, toMcpContent } from "../core/envelope.js";
+import { checkAgentsViewAvailable } from "../core/agents-view-preflight.js";
 
 export const orraSpawnSchema = z.object({
   task: z.string().min(1).describe("The task prompt for the spawned bg agent."),
@@ -23,6 +24,11 @@ export async function handleOrraSpawn(
   projectRoot: string,
   input: z.infer<typeof orraSpawnSchema>,
 ) {
+  const pf = await checkAgentsViewAvailable();
+  if (!pf.ok) {
+    return toMcpContent(fail(pf.reason, { code: "agents_view_unavailable" }));
+  }
+
   try {
     const config = await loadConfig(projectRoot);
     const slug = slugify(input.task) || "agent";

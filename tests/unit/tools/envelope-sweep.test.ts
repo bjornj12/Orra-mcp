@@ -12,6 +12,7 @@ vi.mock("../../../src/core/claude-cli.js", () => ({
   stopSession: vi.fn(async () => undefined),
   removeSession: vi.fn(async () => undefined),
   buildBgArgs: vi.fn(() => []),
+  claudeVersion: vi.fn(async () => "2.1.139"),
 }));
 
 vi.mock("../../../src/core/daemon-state.js", async (importOriginal) => {

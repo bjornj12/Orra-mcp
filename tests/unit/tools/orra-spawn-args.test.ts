@@ -6,6 +6,7 @@ import * as os from "node:os";
 vi.mock("../../../src/core/claude-cli.js", () => ({
   bgSpawn: vi.fn(async () => ({ shortId: "abcd1234", raw: "backgrounded · abcd1234" })),
   buildBgArgs: vi.fn(),
+  claudeVersion: vi.fn(async () => "2.1.139"),
 }));
 
 vi.mock("../../../src/core/daemon-state.js", async (importOriginal) => {

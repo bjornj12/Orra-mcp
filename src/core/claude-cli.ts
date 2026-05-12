@@ -256,3 +256,22 @@ export async function daemonStatus(): Promise<DaemonStatusResult> {
     return { running: false, raw };
   }
 }
+
+/**
+ * Returns the installed Claude Code version string (e.g. "2.1.139"), parsed
+ * from `claude --version` output ("2.1.139 (Claude Code)").
+ *
+ * Returns null on any error (claude not on PATH, parse failure, etc.).
+ */
+export async function claudeVersion(): Promise<string | null> {
+  try {
+    const { stdout } = await execFile("claude", ["--version"], {
+      env: { ...process.env },
+      timeout: 10_000,
+    });
+    const match = stdout.match(/^\s*([\d.]+)/);
+    return match ? match[1] : null;
+  } catch {
+    return null;
+  }
+}
