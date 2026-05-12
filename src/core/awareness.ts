@@ -14,6 +14,7 @@ import {
 import { loadConfig } from "./config.js";
 import { buildProviders, fetchAndMergeProviders } from "./providers/index.js";
 import type { ProviderWorktree, StageInfo } from "./providers/types.js";
+import { createClaudeDaemonProvider } from "./providers/claude-daemon.js";
 import { loadPipeline, detectStage } from "./pipeline.js";
 import { getOrComputeSummary } from "./summary.js";
 
@@ -318,7 +319,10 @@ export async function scanAll(projectRoot: string): Promise<ScanResult> {
   const config = await loadConfig(projectRoot);
 
   // Step 1: Fetch providers
-  const providers = buildProviders(config.providers, projectRoot);
+  // Prepend the built-in claude-daemon provider so user-configured providers
+  // can override its agent data (mergeProviderResults: later provider wins for agent).
+  const daemonProvider = createClaudeDaemonProvider();
+  const providers = [daemonProvider, ...buildProviders(config.providers, projectRoot)];
   const { merged: providerData, status: providerStatus } = await fetchAndMergeProviders(
     providers, config.providerCache,
   );
@@ -333,21 +337,47 @@ export async function scanAll(projectRoot: string): Promise<ScanResult> {
   const nativeWorktrees = allWorktrees.filter((wt) => wt.path !== projectRoot);
 
   // Step 3: Build unified worktree list (provider data + native discovery)
-  const worktreeIds = new Set<string>();
+  //
+  // Join strategy: native worktrees (from `git worktree list`) are the authoritative
+  // source of ids (basename of path). Provider data is joined by path. This means the
+  // daemon provider — which uses the full worktree path as its id — gets correctly
+  // associated with the native worktree entry rather than appearing as a separate entry.
+  //
+  // Build a reverse index: path → ProviderWorktree (to support path-based join)
+  const providerByPath = new Map<string, ProviderWorktree>();
+  for (const pWt of providerData.values()) {
+    if (pWt.path) {
+      providerByPath.set(pWt.path, pWt);
+    }
+  }
+
+  const worktreePaths = new Set<string>();
   const worktreesToProcess: Array<{
     id: string; path: string; branch: string; providerData?: ProviderWorktree;
   }> = [];
 
-  for (const [id, pWt] of providerData) {
-    worktreeIds.add(id);
-    worktreesToProcess.push({ id, path: pWt.path, branch: pWt.branch, providerData: pWt });
-  }
-
+  // First pass: native worktrees (authoritative for id + path + branch)
   for (const nwt of nativeWorktrees) {
     const id = worktreeIdFromPath(nwt.path, projectRoot);
-    if (!worktreeIds.has(id)) {
-      worktreeIds.add(id);
-      worktreesToProcess.push({ id, path: nwt.path, branch: nwt.branch });
+    // Look up provider data by path (handles both short ids and full-path ids)
+    const pd = providerData.get(id) ?? providerData.get(nwt.path) ?? providerByPath.get(nwt.path);
+    worktreePaths.add(nwt.path);
+    worktreesToProcess.push({
+      id,
+      path: nwt.path,
+      branch: pd?.branch || nwt.branch,
+      providerData: pd,
+    });
+  }
+
+  // Second pass: provider-only entries (paths not in native worktree list)
+  for (const pWt of providerData.values()) {
+    if (pWt.path && !worktreePaths.has(pWt.path)) {
+      // Provider knows about a path that git worktree list didn't return.
+      // This can happen with stale job records; include them (Step 4 will drop non-existent paths).
+      const id = worktreeIdFromPath(pWt.path, projectRoot);
+      worktreePaths.add(pWt.path);
+      worktreesToProcess.push({ id, path: pWt.path, branch: pWt.branch, providerData: pWt });
     }
   }
 
@@ -377,10 +407,11 @@ export async function scanAll(projectRoot: string): Promise<ScanResult> {
     // Markers: use provider data or scan natively
     const markers = pd?.markers ?? await scanMarkers(wt.path, config.markers);
 
-    // Agent: use provider data or read from .orra/agents/
-    const agent = pd?.agent
-      ? pd.agent as AgentState
-      : await readAgentState(projectRoot, wt.id);
+    // Agent: comes from provider data (the daemon provider now populates this).
+    // If no provider supplied agent data, agent is null.
+    // Note: ProviderWorktree.agent is a .partial() — fields like pid/exitCode/pendingQuestion
+    // may be absent. The cast is intentional; a later task shrinks AgentState to match.
+    const agent = pd?.agent ? (pd.agent as AgentState) : null;
 
     // PR: from provider data (will be filled after GitHub enrichment if null)
     const pr = pd?.pr ?? null;
@@ -507,18 +538,14 @@ export async function inspectOne(
     }
   }
 
-  // Agent output tail (last 50 lines)
+  // Agent output tail: read from the daemon transcript jsonl (linkScanPath).
+  // A later task adds proper JSONL transcript parsing; raw tail is acceptable for now.
   let agentOutputTail = "";
-  if (entry.agent) {
+  const linkScanPath = entry.extras?.linkScanPath;
+  if (typeof linkScanPath === "string" && linkScanPath) {
     try {
-      const logPath = path.join(
-        projectRoot,
-        ".orra",
-        "agents",
-        `${entry.agent.id}.log`
-      );
-      const content = await fs.readFile(logPath, "utf-8");
-      const lines = content.split("\n").filter((l) => l.length > 0);
+      const content = await fs.readFile(linkScanPath, "utf-8");
+      const lines = content.split("\n").filter((l) => l.trim().length > 0);
       agentOutputTail = lines.slice(-50).join("\n");
     } catch {
       agentOutputTail = "";

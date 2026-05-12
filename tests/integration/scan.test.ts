@@ -7,6 +7,8 @@ import { scanAll } from "../../src/core/awareness.js";
 
 describe("Scan Pipeline (integration)", () => {
   let tmpDir: string;
+  let fakeConfigDir: string;
+  let prevConfigDir: string | undefined;
 
   beforeEach(() => {
     // Use realpathSync to resolve macOS /var → /private/var symlink so git worktree
@@ -17,11 +19,22 @@ describe("Scan Pipeline (integration)", () => {
     execSync('git config user.name "Test User"', { cwd: tmpDir });
     execSync("git commit --allow-empty -m 'init'", { cwd: tmpDir });
     fs.mkdirSync(path.join(tmpDir, ".orra", "agents"), { recursive: true });
+
+    // Isolate the daemon provider: each test gets its own empty CLAUDE_CONFIG_DIR
+    fakeConfigDir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "orra-scan-cfg-")));
+    prevConfigDir = process.env.CLAUDE_CONFIG_DIR;
+    process.env.CLAUDE_CONFIG_DIR = fakeConfigDir;
   });
 
   afterEach(() => {
+    if (prevConfigDir === undefined) {
+      delete process.env.CLAUDE_CONFIG_DIR;
+    } else {
+      process.env.CLAUDE_CONFIG_DIR = prevConfigDir;
+    }
     try { execSync("git worktree prune", { cwd: tmpDir }); } catch {}
     fs.rmSync(tmpDir, { recursive: true, force: true });
+    fs.rmSync(fakeConfigDir, { recursive: true, force: true });
   });
 
   // Test 1: Empty scan
@@ -80,26 +93,32 @@ describe("Scan Pipeline (integration)", () => {
     expect(result.worktrees[0].markers).toContain("spec.md");
   });
 
-  // Test 5: Agent with pending question → needs_attention
-  it("should detect agent with pending question as needs_attention", async () => {
+  // Test 5: Blocked agent (daemon state) → needs_attention
+  it("should detect blocked daemon agent as needs_attention", async () => {
     const wtPath = path.join(tmpDir, "worktrees", "blocked-agent");
     execSync(`git worktree add ${wtPath} -b feat/blocked-agent`, { cwd: tmpDir });
     fs.writeFileSync(path.join(wtPath, "file.ts"), "x");
     execSync("git add file.ts && git commit -m 'wip'", { cwd: wtPath });
 
-    fs.writeFileSync(path.join(tmpDir, ".orra", "agents", "blocked-agent.json"), JSON.stringify({
-      id: "blocked-agent",
-      task: "test task",
-      branch: "feat/blocked-agent",
-      worktree: "worktrees/blocked-agent",
-      pid: process.pid, // alive PID
-      status: "waiting",
-      agentPersona: null,
-      model: null,
+    // Write a daemon job state with state=blocked pointing at this worktree
+    const jobDir = path.join(fakeConfigDir, "jobs", "testshort");
+    fs.mkdirSync(jobDir, { recursive: true });
+    fs.writeFileSync(path.join(jobDir, "state.json"), JSON.stringify({
+      state: "blocked",
+      detail: "waiting for user input",
+      tempo: "idle",
+      inFlight: { tasks: 0, queued: 0, kinds: [] },
+      output: { result: null },
+      children: null,
+      intent: "blocked task",
+      name: "blocked-agent",
+      sessionId: "testshort-session",
+      daemonShort: "testshort",
+      worktreePath: wtPath,
+      cwd: wtPath,
+      backend: "daemon",
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
-      exitCode: null,
-      pendingQuestion: { tool: "Bash", input: { command: "git push" } },
     }));
 
     const result = await scanAll(tmpDir);

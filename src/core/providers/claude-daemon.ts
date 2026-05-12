@@ -176,8 +176,12 @@ function rosterWorkerToProviderWorktree(
 // ---------------------------------------------------------------------------
 
 export function createClaudeDaemonProvider(opts?: { configDir?: string }): StateProvider {
+  // Include the resolved configDir in the provider name so the cache key is
+  // unique per daemon location. In production CLAUDE_CONFIG_DIR doesn't change
+  // between calls; in tests each test uses a different tmpdir.
+  const resolvedDir = opts?.configDir ?? defaultConfigDir();
   return {
-    name: "claude-daemon",
+    name: `claude-daemon:${resolvedDir}`,
 
     // claude-daemon is a built-in, not a user-configured provider — it is not
     // in ProviderConfigSchema's discriminated union. We cast a minimal sentinel
@@ -185,7 +189,7 @@ export function createClaudeDaemonProvider(opts?: { configDir?: string }): State
     config: { type: "claude-daemon" } as unknown as ProviderConfig,
 
     async fetch(): Promise<ProviderResult> {
-      const dir = opts?.configDir ?? defaultConfigDir();
+      const dir = resolvedDir;
 
       // Soft-fail: if the daemon has never been started, return empty.
       let jobs: JobState[];

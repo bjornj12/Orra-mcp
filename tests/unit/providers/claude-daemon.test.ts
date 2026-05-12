@@ -254,9 +254,9 @@ describe("createClaudeDaemonProvider", () => {
     }
   });
 
-  it("provider name is 'claude-daemon'", () => {
+  it("provider name starts with 'claude-daemon'", () => {
     const provider = createClaudeDaemonProvider({ configDir: tmpDir });
-    expect(provider.name).toBe("claude-daemon");
+    expect(provider.name).toMatch(/^claude-daemon:/);
   });
 
   it("blocked job → no flags for non-blocked job", async () => {

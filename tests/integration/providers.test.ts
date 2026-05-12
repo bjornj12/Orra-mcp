@@ -32,7 +32,11 @@ describe("Provider Integration", () => {
     const result = await scanAll(tmpDir);
     expect(result.worktrees).toHaveLength(1);
     expect(result.providerStatus).toBeDefined();
-    expect(result.providerStatus!.used).toHaveLength(0);
+    // The built-in claude-daemon provider is always included; no user-configured providers.
+    const userProviders = result.providerStatus!.used.filter(
+      (name) => !name.startsWith("claude-daemon")
+    );
+    expect(userProviders).toHaveLength(0);
   });
 
   it("should merge file provider data with native scan", async () => {
