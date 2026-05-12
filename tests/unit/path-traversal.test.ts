@@ -5,11 +5,9 @@
  * writing outside `.orra/agents/` via a crafted worktree parameter.
  */
 import { describe, it, expect } from "vitest";
-import { orraUnblockSchema } from "../../src/tools/orra-unblock.js";
 import { orraKillSchema } from "../../src/tools/orra-kill.js";
 import { orraRebaseSchema } from "../../src/tools/orra-rebase.js";
 import { orraInspectSchema } from "../../src/tools/orra-inspect.js";
-import { orraRegisterSchema } from "../../src/tools/orra-register.js";
 
 const TRAVERSAL_ATTEMPTS = [
   "../etc/passwd",
@@ -27,22 +25,6 @@ const TRAVERSAL_ATTEMPTS = [
   "$(whoami)",
   "`id`",
 ];
-
-describe("orra_unblock rejects path-traversal worktree values", () => {
-  for (const attempt of TRAVERSAL_ATTEMPTS) {
-    it(`rejects ${JSON.stringify(attempt)}`, () => {
-      expect(() =>
-        orraUnblockSchema.parse({ worktree: attempt, allow: true }),
-      ).toThrow();
-    });
-  }
-
-  it("accepts a normal worktree ID", () => {
-    expect(() =>
-      orraUnblockSchema.parse({ worktree: "feat-auth-a1b2", allow: true }),
-    ).not.toThrow();
-  });
-});
 
 describe("orra_kill rejects path-traversal worktree values", () => {
   for (const attempt of TRAVERSAL_ATTEMPTS) {
@@ -72,26 +54,4 @@ describe("orra_inspect rejects path-traversal worktree values", () => {
       expect(() => orraInspectSchema.parse({ worktree: attempt })).toThrow();
     });
   }
-});
-
-describe("orra_register accepts absolute paths but rejects unsafe IDs", () => {
-  it("accepts an absolute path", () => {
-    expect(() =>
-      orraRegisterSchema.parse({ worktree: "/tmp/some/worktree" }),
-    ).not.toThrow();
-  });
-
-  it("accepts a normal worktree ID", () => {
-    expect(() =>
-      orraRegisterSchema.parse({ worktree: "feat-auth" }),
-    ).not.toThrow();
-  });
-
-  it("rejects path-traversal IDs", () => {
-    expect(() =>
-      orraRegisterSchema.parse({ worktree: "../etc/passwd" }),
-    ).toThrow();
-    expect(() => orraRegisterSchema.parse({ worktree: "foo/bar" })).toThrow();
-    expect(() => orraRegisterSchema.parse({ worktree: "" })).toThrow();
-  });
 });

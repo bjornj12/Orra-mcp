@@ -6,14 +6,14 @@ MCP server that gives Claude Code awareness and coordination tools for multi-wor
 
 ## Architecture
 
-Orra observes and coordinates worktrees, and can spawn detached headless agents to handle routine maintenance work in the background. The user still creates their *primary* worktrees via their preferred tool (Superset, manual `git worktree add`, etc.); Orra tracks them via hooks once registered. For autonomous remediation (rebases, lint fixes, snapshot updates), Orra can spawn its own background agents via `orra_spawn`.
+Orra observes and coordinates worktrees, riding on the Claude Code Agents View as the substrate. It reads bg-session state from the daemon's on-disk interface, spawns agents via `claude --bg`, and provides the directive + memory layer on top. The user creates worktrees via their preferred tool or `--worktree`; Orra classifies and coordinates them.
 
 **Three capabilities:**
-- **Awareness** — Scan worktrees via git/filesystem/GitHub/state-providers to classify status (ready_to_land, needs_attention, in_progress, idle, stale). Pre-computes per-agent summaries (test result, stuck detection, attention score) so callers don't have to re-parse logs.
-- **Coordination** — Register worktrees for tracking, unblock permission prompts, stop agents, rebase branches, install directives.
-- **Spawning** — Detached `claude --print` (headless) agents for routine maintenance, locked down to a safe `--allowed-tools` allowlist by default and capped by a configurable concurrency limit.
+- **Awareness** — Scan worktrees via git/filesystem/GitHub/daemon-state/state-providers to classify status (ready_to_land, needs_attention, in_progress, idle, stale). Pre-computes per-agent summaries (test result, stuck detection, attention score) so callers don't have to re-parse transcripts.
+- **Coordination** — Stop/kill agents via `claude stop`/`claude rm`, rebase branches, install directives. Blocked agents are unblocked via `claude attach <shortId>`.
+- **Spawning** — Native `claude --bg` bg agents; provenance recorded in `.orra/spawns/`.
 
-**13 MCP tools:** orra_resume, orra_scan, orra_inspect, orra_register, orra_unblock, orra_kill, orra_rebase, orra_setup, orra_directive, orra_spawn, orra_tick, orra_checkpoint, orra_cache_write
+**11 MCP tools:** orra_resume, orra_scan, orra_inspect, orra_kill, orra_rebase, orra_setup, orra_directive, orra_spawn, orra_tick, orra_checkpoint, orra_cache_write
 
 ## Testing
 
@@ -24,8 +24,8 @@ npm run build     # compile TypeScript
 
 ## Structure
 
-- `src/core/` — awareness engine, config, agent manager, worktree, state
-- `src/tools/` — MCP tool handlers (13 individual tools)
-- `src/bin/` — hook script (file-based), setup script
+- `src/core/` — awareness engine, config, daemon-state, claude-cli, providers, state
+- `src/tools/` — MCP tool handlers (11 individual tools)
+- `src/bin/` — hook script, setup script, orra-launch
 - `src/templates/` — orchestrator agent persona
 - `tests/` — unit + integration tests

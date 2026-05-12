@@ -15,26 +15,10 @@ export function resolveAgentId(env: Record<string, string | undefined>, projectR
     }
   })();
 
-  // Defense-in-depth: the agent ID flows into filesystem paths
-  // (.orra/agents/<id>.json, .answer.json). Reject anything that
-  // doesn't look like a safe ID — an attacker with write access to
-  // self.id would otherwise get a path-traversal primitive.
+  // Defense-in-depth: the agent ID flows into filesystem paths.
+  // Reject anything that doesn't look like a safe ID.
   if (!raw || !isSafeWorktreeId(raw)) return null;
   return raw;
-}
-
-export function buildPermissionResponse(allow: boolean): object {
-  return {
-    hookSpecificOutput: {
-      hookEventName: "PermissionRequest",
-      decision: { behavior: allow ? "allow" : "deny" },
-    },
-  };
-}
-
-export function parseAllowDeny(input: string): boolean {
-  const lower = input.trim().toLowerCase();
-  return ["yes", "y", "allow", "approve", "ok"].includes(lower);
 }
 
 // --- Main hook logic ---
@@ -85,107 +69,10 @@ function resolveStateDir(env: Record<string, string | undefined>, worktreeRoot: 
   return path.join(mainRoot, ".orra");
 }
 
-function ensureAgentFile(projectRoot: string, agentId: string): void {
-  const agentFile = path.join(projectRoot, ".orra", "agents", `${agentId}.json`);
-  if (fs.existsSync(agentFile)) return;
-
-  // Auto-create agent state file on first hook fire
-  const agentsDir = path.join(projectRoot, ".orra", "agents");
-  fs.mkdirSync(agentsDir, { recursive: true });
-  const now = new Date().toISOString();
-  const state = {
-    id: agentId,
-    task: "",
-    branch: "",
-    worktree: "",
-    pid: process.ppid || 0,
-    status: "running",
-    agentPersona: null,
-    model: null,
-    createdAt: now,
-    updatedAt: now,
-    exitCode: null,
-    pendingQuestion: null,
-  };
-  fs.writeFileSync(agentFile, JSON.stringify(state, null, 2));
-}
-
-export async function writeQuestion(
-  projectRoot: string, agentId: string, tool: string, input: Record<string, unknown>
-): Promise<void> {
-  ensureAgentFile(projectRoot, agentId);
-  const agentFile = path.join(projectRoot, ".orra", "agents", `${agentId}.json`);
-  const data = JSON.parse(fs.readFileSync(agentFile, "utf-8"));
-  data.status = "waiting";
-  data.updatedAt = new Date().toISOString();
-  data.pendingQuestion = { tool, input };
-  // Atomic write
-  const tmpFile = agentFile + ".tmp";
-  fs.writeFileSync(tmpFile, JSON.stringify(data, null, 2));
-  fs.renameSync(tmpFile, agentFile);
-}
-
-export async function pollForAnswer(
-  projectRoot: string, agentId: string, timeoutMs = 300000, intervalMs = 100
-): Promise<{ allow: boolean; reason?: string }> {
-  const answerPath = path.join(projectRoot, ".orra", "agents", `${agentId}.answer.json`);
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    try {
-      const data = fs.readFileSync(answerPath, "utf-8");
-      const answer = JSON.parse(data);
-      try { fs.unlinkSync(answerPath); } catch {}
-      return { allow: !!answer.allow, reason: answer.reason };
-    } catch {
-      // File doesn't exist yet
-    }
-    await new Promise(resolve => setTimeout(resolve, intervalMs));
-  }
-  return { allow: false }; // Timeout → deny
-}
-
-export async function writeTurnComplete(projectRoot: string, agentId: string): Promise<void> {
-  ensureAgentFile(projectRoot, agentId);
-  const agentFile = path.join(projectRoot, ".orra", "agents", `${agentId}.json`);
-  try {
-    const data = JSON.parse(fs.readFileSync(agentFile, "utf-8"));
-    data.status = "idle";
-    data.updatedAt = new Date().toISOString();
-    data.pendingQuestion = null;
-    const tmpFile = agentFile + ".tmp";
-    fs.writeFileSync(tmpFile, JSON.stringify(data, null, 2));
-    fs.renameSync(tmpFile, agentFile);
-  } catch {}
-}
-
-async function handlePermissionRequest(
-  agentId: string,
-  projectRoot: string,
-  hookInput: Record<string, unknown>
-): Promise<void> {
-  const toolName = (hookInput.tool_name as string) ?? "unknown";
-  const toolInput = (hookInput.tool_input as Record<string, unknown>) ?? {};
-
-  try {
-    await writeQuestion(projectRoot, agentId, toolName, toolInput);
-  } catch {
-    process.exit(1);
-  }
-
-  const answer = await pollForAnswer(projectRoot, agentId, 300000, 100);
-
-  if (answer.allow) {
-    console.log(JSON.stringify(buildPermissionResponse(true)));
-    process.exit(0);
-  } else {
-    const reason = answer.reason ?? "Denied by orchestrator";
-    console.error(reason);
-    process.exit(2);
-  }
-}
-
-async function handleStop(agentId: string, projectRoot: string): Promise<void> {
-  await writeTurnComplete(projectRoot, agentId);
+async function handleStop(_agentId: string, _projectRoot: string): Promise<void> {
+  // Stop hook: signal that the session ended. Previously wrote idle status to
+  // the agent file, but agent lifecycle state is now owned by the daemon.
+  // Nothing to do here; exit cleanly.
   process.exit(0);
 }
 
@@ -212,13 +99,12 @@ async function main(): Promise<void> {
   }
 
   switch (hookEvent) {
-    case "PermissionRequest":
-      await handlePermissionRequest(agentId!, projectRoot, hookInput);
-      break;
     case "Stop":
-      await handleStop(agentId!, projectRoot);
+      await handleStop(agentId, projectRoot);
       break;
     default:
+      // PermissionRequest and other hook events are no longer handled here.
+      // Use `claude attach <shortId>` to interact with a waiting agent.
       process.exit(0);
   }
 }
