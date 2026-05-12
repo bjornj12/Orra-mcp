@@ -13,12 +13,15 @@ export interface LogSignals {
 
 // ─── ANSI stripping ───────────────────────────────────────────────────────────
 
-// ANSI CSI sequences: ESC [ <params> <final-byte>
-// Covers colors, bold, underline, cursor moves, etc.
-const ANSI_CSI_RE = /\[[0-9;]*[A-Za-z]/g;
+// ESC [ ... <final byte>  — CSI sequences: colors, bold, cursor moves, private
+// modes (e.g. \x1b[?2026h), bracketed paste, etc. Written with \x1b (not a literal
+// control byte) so the source stays greppable.
+const ANSI_CSI_RE = /\x1b\[[0-?]*[ -/]*[@-~]/g;
+// ESC ] ... (BEL | ESC \)  — OSC sequences: window title, hyperlinks (\x1b]0;…BEL).
+const ANSI_OSC_RE = /\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)/g;
 
 export function stripAnsi(text: string): string {
-  return text.replace(ANSI_CSI_RE, "");
+  return text.replace(ANSI_OSC_RE, "").replace(ANSI_CSI_RE, "");
 }
 
 // ─── Signal detection heuristics ─────────────────────────────────────────────

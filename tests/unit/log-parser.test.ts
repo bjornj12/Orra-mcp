@@ -13,11 +13,11 @@ const SAMPLE_FIXTURE = path.join(FIXTURES_DIR, "transcript-sample.jsonl");
 
 describe("stripAnsi", () => {
   it("removes CSI color codes", () => {
-    expect(stripAnsi("[31mred[0m")).toBe("red");
+    expect(stripAnsi("\x1b[31mred\x1b[0m")).toBe("red");
   });
 
   it("removes bold and underline", () => {
-    expect(stripAnsi("[1mbold[22m [4munder[24m")).toBe("bold under");
+    expect(stripAnsi("\x1b[1mbold\x1b[22m \x1b[4munder\x1b[24m")).toBe("bold under");
   });
 
   it("leaves plain text untouched", () => {
@@ -25,7 +25,7 @@ describe("stripAnsi", () => {
   });
 
   it("handles mixed content", () => {
-    expect(stripAnsi("prefix [32mgreen[0m suffix")).toBe("prefix green suffix");
+    expect(stripAnsi("prefix \x1b[32mgreen\x1b[0m suffix")).toBe("prefix green suffix");
   });
 });
 
