@@ -1,46 +1,72 @@
 import { z } from "zod";
-import { AgentManager } from "../core/agent-manager.js";
-import { ConcurrencyLimitError } from "../core/spawn-defaults.js";
+import * as fsp from "node:fs/promises";
+import * as path from "node:path";
+import * as cli from "../core/claude-cli.js";
+import { readJobState, configDir } from "../core/daemon-state.js";
+import { recordSpawn } from "../core/state.js";
+import { loadConfig } from "../core/config.js";
+import { slugify } from "../core/slug.js";
 import { ok, fail, toMcpContent } from "../core/envelope.js";
 
 export const orraSpawnSchema = z.object({
-  task: z.string().min(1).describe("The prompt for the spawned headless Claude agent."),
+  task: z.string().min(1).describe("The task prompt for the spawned bg agent."),
   reason: z.string().min(1).describe("Why this agent is being spawned (logged for accountability)."),
-  worktree: z.string().optional().describe("Optional: id of an existing worktree to attach to. If omitted, a new worktree is created."),
-  branch: z.string().optional().describe("Optional: branch name for the new worktree. Ignored if worktree is provided."),
-  allowedTools: z.array(z.string()).optional().describe("Optional: override the default --allowed-tools allowlist. Use sparingly — the default is locked-down for safety."),
   model: z.string().optional().describe("Optional: override the default model."),
+  agent: z.string().optional().describe("Optional: agent persona to use."),
+  allowedTools: z.array(z.string()).optional().describe("Optional: auto-approved tools (added on top of session defaults)."),
+  disallowedTools: z.array(z.string()).optional().describe("Optional: tools to explicitly block."),
+  worktree: z.boolean().optional().describe("Optional: when true, claude --bg creates a native worktree for this session."),
+  cwd: z.string().optional().describe("Optional: working directory for the spawned agent."),
 });
 
 export async function handleOrraSpawn(
-  manager: AgentManager,
+  projectRoot: string,
   input: z.infer<typeof orraSpawnSchema>,
 ) {
-  await manager.init();
-
   try {
-    const result = await manager.spawnAgent({
+    const config = await loadConfig(projectRoot);
+    const slug = slugify(input.task) || "agent";
+
+    const result = await cli.bgSpawn({
+      name: slug,
+      task: input.task,
+      model: input.model ?? config.defaultModel ?? undefined,
+      agent: input.agent ?? config.defaultAgent ?? undefined,
+      allowedTools: input.allowedTools,
+      disallowedTools: input.disallowedTools,
+      worktree: input.worktree,
+      cwd: input.cwd,
+    });
+
+    // Try to read the daemon's job state to get the full sessionId
+    const jobState = await readJobState(configDir(), result.shortId);
+    const sessionId = jobState?.sessionId ?? result.shortId;
+
+    // Record provenance in the spawn ledger
+    await recordSpawn(projectRoot, {
+      shortId: result.shortId,
+      sessionId,
+      slug,
       task: input.task,
       reason: input.reason,
-      worktreeId: input.worktree,
-      branch: input.branch,
-      allowedTools: input.allowedTools,
-      model: input.model,
+      spawnedBy: process.env.ORRA_AGENT_ID ?? "orchestrator",
     });
+
+    // Append a memory note to .orra/memory/worktrees/<slug>.md
+    const memoryDir = path.join(projectRoot, ".orra", "memory", "worktrees");
+    await fsp.mkdir(memoryDir, { recursive: true });
+    const memoryFile = path.join(memoryDir, `${slug}.md`);
+    const line = `- spawned ${new Date().toISOString()}: ${input.reason} (session ${result.shortId})\n`;
+    await fsp.appendFile(memoryFile, line);
 
     return toMcpContent(ok({
       spawned: true,
-      ...result,
+      shortId: result.shortId,
+      sessionId,
+      name: slug,
       reason: input.reason,
     }));
   } catch (err) {
-    if (err instanceof ConcurrencyLimitError) {
-      return toMcpContent(fail(err.message, {
-        code: "concurrency_limit",
-        current: err.current,
-        limit: err.limit,
-      }));
-    }
     return toMcpContent(fail(err instanceof Error ? err.message : String(err), {
       code: "spawn_failed",
     }));

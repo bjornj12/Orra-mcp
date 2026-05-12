@@ -254,12 +254,12 @@ export async function enrichWithGitHub(
 
 // ─── parseWorktreeList ────────────────────────────────────────────────────────
 
-interface WorktreeInfo {
+export interface WorktreeInfo {
   path: string;
   branch: string;
 }
 
-function parseWorktreeList(stdout: string): WorktreeInfo[] {
+export function parseWorktreeList(stdout: string): WorktreeInfo[] {
   const worktrees: WorktreeInfo[] = [];
   const blocks = stdout.split("\n\n");
   for (const block of blocks) {
@@ -339,8 +339,14 @@ export async function scanAll(projectRoot: string): Promise<ScanResult> {
   }
 
   // Second pass: provider-only entries (paths not in native worktree list)
+  // Restrict to paths that are sub-directories of projectRoot so the daemon
+  // provider (which returns all jobs globally) doesn't inject entries from
+  // unrelated repos running in the same daemon.
+  const projectRootNorm = projectRoot.endsWith(path.sep) ? projectRoot : projectRoot + path.sep;
   for (const pWt of providerData.values()) {
     if (pWt.path && !worktreePaths.has(pWt.path)) {
+      // Only include paths that live under the current project root.
+      if (!pWt.path.startsWith(projectRootNorm)) continue;
       // Provider knows about a path that git worktree list didn't return.
       // This can happen with stale job records; include them (Step 4 will drop non-existent paths).
       const id = worktreeIdFromPath(pWt.path, projectRoot);
