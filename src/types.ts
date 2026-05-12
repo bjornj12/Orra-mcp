@@ -11,11 +11,9 @@ export type { StageInfo, ProviderStatus } from "./core/providers/types.js";
 
 export const AgentStatus = z.enum([
   "running",
-  "idle",
   "waiting",
   "completed",
   "failed",
-  "interrupted",
   "killed",
 ]);
 export type AgentStatus = z.infer<typeof AgentStatus>;
@@ -29,7 +27,6 @@ export const ConfigSchema = z.object({
   defaultAgent: z.string().nullable().default(null),
   providers: z.array(ProviderConfigSchema).default([]),
   providerCache: ProviderCacheConfigSchema.default({ ttl: 5000 }),
-  headlessSpawnConcurrency: z.number().int().min(0).default(3),
 });
 export type Config = z.infer<typeof ConfigSchema>;
 
@@ -60,27 +57,36 @@ export const WorktreeStatusSchema = z.enum([
 ]);
 export type WorktreeStatus = z.infer<typeof WorktreeStatusSchema>;
 
-export const PendingQuestionSchema = z.object({
-  tool: z.string(),
-  input: z.record(z.string(), z.unknown()),
-});
-export type PendingQuestion = z.infer<typeof PendingQuestionSchema>;
 
 export const AgentStateSchema = z.object({
   id: z.string(),
+  sessionId: z.string(),
+  shortId: z.string(),
   task: z.string(),
   branch: z.string(),
   worktree: z.string(),
-  pid: z.number(),
   status: AgentStatus,
   agentPersona: z.string().nullable(),
   model: z.string().nullable(),
+  detail: z.string().nullable().default(null),
+  tempo: z.string().nullable().default(null),
   createdAt: z.string(),
   updatedAt: z.string(),
-  exitCode: z.number().nullable(),
-  pendingQuestion: PendingQuestionSchema.nullable(),
 });
 export type AgentState = z.infer<typeof AgentStateSchema>;
+
+// ─── Spawn Ledger ─────────────────────────────────────────────────────────────
+
+export const SpawnLedgerEntrySchema = z.object({
+  shortId: z.string(),
+  sessionId: z.string(),
+  slug: z.string(),
+  task: z.string(),
+  reason: z.string(),
+  spawnedBy: z.string(),
+  spawnedAt: z.string(),
+});
+export type SpawnLedgerEntry = z.infer<typeof SpawnLedgerEntrySchema>;
 
 export const AgentSummarySchema = z.object({
   agentId: z.string(),

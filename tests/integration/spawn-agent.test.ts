@@ -1,229 +1,138 @@
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
-import * as fs from "node:fs/promises";
+/**
+ * Integration test: spawn a real bg agent via handleOrraSpawn.
+ * Gated on `claude` being installed and working (skipIf otherwise).
+ *
+ * Uses the daemon's on-disk state (readJobState) to poll for completion.
+ * Keeps the task trivial (say hello and stop) and uses haiku to stay fast.
+ */
+import { describe, it, expect, afterEach } from "vitest";
+import * as fsp from "node:fs/promises";
 import * as path from "node:path";
 import * as os from "node:os";
-import { execSync } from "node:child_process";
-import { AgentManager } from "../../src/core/agent-manager.js";
+import { execFileSync } from "node:child_process";
+import { handleOrraSpawn } from "../../src/tools/orra-spawn.js";
+import { readJobState, configDir } from "../../src/core/daemon-state.js";
+import { readSpawnLedger } from "../../src/core/state.js";
+import * as cli from "../../src/core/claude-cli.js";
 
-let projectDir: string;
-let worktreeDir: string;
-let manager: AgentManager;
+// Detect whether claude is on PATH *and* has --bg (Agents View) enabled.
+// Uses `claude daemon status` to check — fast (no spawn), shows if the
+// daemon capability is available.
+const hasClaude = (() => {
+  try {
+    // First verify claude is on PATH
+    execFileSync("claude", ["--version"], { stdio: "pipe", timeout: 10_000 });
+    // Check --bg is not explicitly disabled
+    // We do this by running a quick probe: try `claude --bg --name orra-probe-check`
+    // without a task — it should fail with a usage error (not "not enabled").
+    // Actually: just check `claude --version` works AND daemon status doesn't
+    // say "not enabled". The simplest reliable check without spawning:
+    try {
+      const out = execFileSync("claude", ["daemon", "status"], {
+        stdio: "pipe",
+        timeout: 10_000,
+      }).toString();
+      // If daemon status works, --bg should too
+      return true;
+    } catch (e) {
+      const msg = String((e as any)?.stderr ?? (e as any)?.stdout ?? (e as any)?.message ?? "");
+      // "not enabled" in the error means --bg is disabled in this environment
+      if (msg.includes("not enabled") || msg.includes("Unknown command")) return false;
+      // Daemon status command exists but daemon isn't running — that's fine,
+      // --bg will start it.
+      return true;
+    }
+  } catch {
+    return false;
+  }
+})();
 
-beforeEach(async () => {
-  projectDir = await fs.mkdtemp(path.join(os.tmpdir(), "orra-spawn-test-"));
-  execSync("git init -q", { cwd: projectDir });
-  execSync("git config user.email test@example.com", { cwd: projectDir });
-  execSync("git config user.name test", { cwd: projectDir });
-  execSync("git commit --allow-empty -q -m init", { cwd: projectDir });
-  execSync("git branch -M main", { cwd: projectDir });
+// Terminal states according to the daemon contract
+const TERMINAL_STATES = new Set(["done", "failed", "error"]);
 
-  // Create an existing worktree we can attach to
-  const worktreeBase = path.join(projectDir, "worktrees", "existing-wt");
-  await fs.mkdir(path.dirname(worktreeBase), { recursive: true });
-  execSync(`git worktree add -q -b feat/existing ${worktreeBase}`, { cwd: projectDir });
-  // Resolve symlinks (macOS /var -> /private/var) so path comparisons match git's output
-  worktreeDir = await fs.realpath(worktreeBase);
+/** Poll readJobState until the job reaches a terminal state or we time out. */
+async function pollUntilTerminal(
+  cfgDir: string,
+  shortId: string,
+  timeoutMs = 25_000,
+): Promise<{ state?: string; timed_out: boolean }> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const job = await readJobState(cfgDir, shortId);
+    if (job?.state && TERMINAL_STATES.has(job.state)) {
+      return { state: job.state, timed_out: false };
+    }
+    await new Promise((r) => setTimeout(r, 1000));
+  }
+  return { state: undefined, timed_out: true };
+}
 
-  manager = new AgentManager(projectDir);
-  await manager.init();
-});
+describe("orra_spawn — real integration", () => {
+  const cleanupIds: string[] = [];
 
-afterEach(async () => {
-  await fs.rm(projectDir, { recursive: true, force: true });
-});
-
-describe("AgentManager.spawnAgent — existing worktree", () => {
-  it("spawns a process and writes initial state", async () => {
-    // Use `node -e` instead of `claude` so the test doesn't depend on Claude being installed
-    const result = await manager.spawnAgent({
-      task: "test task",
-      reason: "integration test",
-      worktreeId: "existing-wt",
-      _spawnCommand: ["node", "-e", "console.log('hello'); setTimeout(() => process.exit(0), 50);"],
-    });
-
-    expect(result.agentId).toMatch(/^test-task-[a-z0-9]{4}$/);
-    expect(result.worktreePath).toBe(worktreeDir);
-    expect(result.branch).toBe("feat/existing");
-    expect(result.pid).toBeGreaterThan(0);
-
-    // State file should exist with status: running
-    const statePath = path.join(projectDir, ".orra", "agents", `${result.agentId}.json`);
-    const state = JSON.parse(await fs.readFile(statePath, "utf-8"));
-    expect(state.status).toBe("running");
-    expect(state.agentPersona).toBe("headless-spawn");
-    expect(state.task).toBe("test task");
-    expect(state.pid).toBe(result.pid);
+  afterEach(async () => {
+    // Clean up any sessions we spawned
+    for (const id of cleanupIds) {
+      try {
+        await cli.removeSession(id);
+      } catch {
+        // Best-effort
+      }
+    }
+    cleanupIds.length = 0;
   });
 
-  it("captures stdout to the log file", async () => {
-    const result = await manager.spawnAgent({
-      task: "log capture test",
-      reason: "verifying log capture",
-      worktreeId: "existing-wt",
-      _spawnCommand: ["node", "-e", "console.log('captured-marker'); setTimeout(() => process.exit(0), 50);"],
-    });
+  it.skipIf(!hasClaude)(
+    "spawns a real bg agent, records spawn ledger, then terminates",
+    async () => {
+      const repo = await fsp.mkdtemp(path.join(os.tmpdir(), "orra-spawn-int-"));
 
-    // Wait for the child to exit (50ms timer + small buffer)
-    await new Promise((r) => setTimeout(r, 200));
+      try {
+        // Initialize a minimal git repo so spawn has a valid cwd
+        execFileSync("git", ["init"], { cwd: repo, stdio: "pipe" });
+        execFileSync("git", ["commit", "--allow-empty", "-m", "init"], {
+          cwd: repo,
+          stdio: "pipe",
+          env: {
+            ...process.env,
+            GIT_AUTHOR_NAME: "test",
+            GIT_AUTHOR_EMAIL: "test@test.com",
+            GIT_COMMITTER_NAME: "test",
+            GIT_COMMITTER_EMAIL: "test@test.com",
+          },
+        });
 
-    const logPath = path.join(projectDir, ".orra", "agents", `${result.agentId}.log`);
-    const log = await fs.readFile(logPath, "utf-8");
-    expect(log).toContain("captured-marker");
-  });
+        const res = await handleOrraSpawn(repo, {
+          task: "Print the word DONE and stop. Nothing else.",
+          reason: "integration test",
+          model: "claude-haiku-4-5",
+          allowedTools: ["Bash"],
+        });
 
-  it("updates state to completed on exit code 0", async () => {
-    const result = await manager.spawnAgent({
-      task: "exit zero test",
-      reason: "verifying success status",
-      worktreeId: "existing-wt",
-      _spawnCommand: ["node", "-e", "process.exit(0);"],
-    });
+        const payload = JSON.parse((res as any).content[0].text);
+        expect(payload.ok).toBe(true);
+        const { shortId } = payload.data;
+        expect(typeof shortId).toBe("string");
+        expect(shortId).toMatch(/^[0-9a-f]{8}$/);
+        cleanupIds.push(shortId);
 
-    await new Promise((r) => setTimeout(r, 200));
+        // Spawn ledger entry must exist
+        const ledger = await readSpawnLedger(repo);
+        const entry = ledger.find((e) => e.shortId === shortId);
+        expect(entry).toBeDefined();
+        expect(entry?.reason).toBe("integration test");
 
-    const statePath = path.join(projectDir, ".orra", "agents", `${result.agentId}.json`);
-    const state = JSON.parse(await fs.readFile(statePath, "utf-8"));
-    expect(state.status).toBe("completed");
-    expect(state.exitCode).toBe(0);
-  });
-
-  it("updates state to failed on non-zero exit", async () => {
-    const result = await manager.spawnAgent({
-      task: "exit nonzero test",
-      reason: "verifying failure status",
-      worktreeId: "existing-wt",
-      _spawnCommand: ["node", "-e", "process.exit(2);"],
-    });
-
-    await new Promise((r) => setTimeout(r, 200));
-
-    const statePath = path.join(projectDir, ".orra", "agents", `${result.agentId}.json`);
-    const state = JSON.parse(await fs.readFile(statePath, "utf-8"));
-    expect(state.status).toBe("failed");
-    expect(state.exitCode).toBe(2);
-  });
-});
-
-describe("AgentManager.spawnAgent — new worktree", () => {
-  it("creates a new worktree when worktreeId is omitted", async () => {
-    const result = await manager.spawnAgent({
-      task: "do something fresh",
-      reason: "needs a clean workspace",
-      _spawnCommand: ["node", "-e", "process.exit(0);"],
-    });
-
-    // WorktreeManager.create returns path.join(projectRoot, ...) — unresolved path
-    const expectedPath = path.join(projectDir, "worktrees", result.agentId);
-    expect(result.worktreePath).toBe(expectedPath);
-    expect(result.branch).toBe(`orra/${result.agentId}`);
-
-    // The new worktree directory should exist
-    const stat = await fs.stat(result.worktreePath);
-    expect(stat.isDirectory()).toBe(true);
-
-    // git worktree list should show it
-    const wtList = execSync("git worktree list --porcelain", { cwd: projectDir, encoding: "utf-8" });
-    expect(wtList).toContain(result.worktreePath);
-  });
-
-  it("respects a custom branch name", async () => {
-    const result = await manager.spawnAgent({
-      task: "custom branch task",
-      reason: "user specified branch",
-      branch: "feat/my-custom-branch",
-      _spawnCommand: ["node", "-e", "process.exit(0);"],
-    });
-
-    expect(result.branch).toBe("feat/my-custom-branch");
-  });
-});
-
-import { ConcurrencyLimitError } from "../../src/core/spawn-defaults.js";
-
-describe("AgentManager.spawnAgent — concurrency limit", () => {
-  it("throws ConcurrencyLimitError when at limit", async () => {
-    // Write a config with limit = 2
-    const orraDir = path.join(projectDir, ".orra");
-    await fs.mkdir(orraDir, { recursive: true });
-    await fs.writeFile(
-      path.join(orraDir, "config.json"),
-      JSON.stringify({
-        markers: ["spec.md"],
-        staleDays: 3,
-        worktreeDir: "worktrees",
-        driftThreshold: 20,
-        defaultModel: null,
-        defaultAgent: null,
-        providers: [],
-        providerCache: { ttl: 5000 },
-        headlessSpawnConcurrency: 2,
-      }),
-    );
-
-    // Spawn two long-running agents
-    const a = await manager.spawnAgent({
-      task: "long one a",
-      reason: "concurrency test",
-      _spawnCommand: ["node", "-e", "setTimeout(() => process.exit(0), 5000);"],
-    });
-    const b = await manager.spawnAgent({
-      task: "long one b",
-      reason: "concurrency test",
-      _spawnCommand: ["node", "-e", "setTimeout(() => process.exit(0), 5000);"],
-    });
-
-    // Third spawn should reject
-    await expect(
-      manager.spawnAgent({
-        task: "third one",
-        reason: "should hit limit",
-        _spawnCommand: ["node", "-e", "process.exit(0);"],
-      })
-    ).rejects.toBeInstanceOf(ConcurrencyLimitError);
-
-    // Cleanup: kill the long-running children and wait for them to actually exit
-    // so afterEach's fs.rm doesn't race against open file handles.
-    try { process.kill(a.pid, "SIGTERM"); } catch {}
-    try { process.kill(b.pid, "SIGTERM"); } catch {}
-    await new Promise((r) => setTimeout(r, 200));
-  });
-
-  it("allows spawning again once a slot frees up", async () => {
-    const orraDir = path.join(projectDir, ".orra");
-    await fs.mkdir(orraDir, { recursive: true });
-    await fs.writeFile(
-      path.join(orraDir, "config.json"),
-      JSON.stringify({
-        markers: ["spec.md"],
-        staleDays: 3,
-        worktreeDir: "worktrees",
-        driftThreshold: 20,
-        defaultModel: null,
-        defaultAgent: null,
-        providers: [],
-        providerCache: { ttl: 5000 },
-        headlessSpawnConcurrency: 1,
-      }),
-    );
-
-    // Spawn one short-lived agent
-    const first = await manager.spawnAgent({
-      task: "quick one",
-      reason: "free up slot",
-      _spawnCommand: ["node", "-e", "process.exit(0);"],
-    });
-
-    // Wait for it to complete
-    await new Promise((r) => setTimeout(r, 200));
-
-    // Should now be able to spawn another
-    const second = await manager.spawnAgent({
-      task: "second quick one",
-      reason: "slot is free",
-      _spawnCommand: ["node", "-e", "process.exit(0);"],
-    });
-
-    expect(second.agentId).not.toBe(first.agentId);
-  });
+        // Wait for the job to finish — use the real configDir()
+        const outcome = await pollUntilTerminal(configDir(), shortId, 25_000);
+        // Timeout is a real failure: the spawned agent must reach a terminal state.
+        if (outcome.timed_out) {
+          throw new Error(`agent ${shortId} did not reach a terminal state within 25s`);
+        }
+        expect(["done", "failed"]).toContain(outcome.state);
+      } finally {
+        await fsp.rm(repo, { recursive: true, force: true });
+      }
+    },
+    30_000,
+  );
 });

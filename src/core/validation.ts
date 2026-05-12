@@ -1,19 +1,17 @@
 import { z } from "zod";
 
 /**
- * Worktree IDs become filesystem paths inside `.orra/agents/<id>.json`,
- * `.orra/agents/<id>.log`, and `.orra/agents/<id>.answer.json`. Without
- * validation, a prompt-injected tool call like
- *   orra_unblock({ worktree: "../../home/user/.bashrc", ... })
- * would escape the state directory.
+ * Worktree IDs become filesystem paths inside `.orra/spawns/<id>.json` and
+ * `.orra/memory/worktrees/<id>.md`. Without validation, a prompt-injected
+ * tool call with `worktree: "../../home/user/.bashrc"` would escape those
+ * directories.
  *
  * Safe IDs must:
  *   - start with an alphanumeric character
  *   - contain only alphanumerics, underscores, and hyphens
  *   - be 1–100 characters long (reasonable upper bound, no empty strings)
  *
- * This matches the format produced by `slugify` in `core/worktree.ts`
- * plus the `-<4-char-suffix>` appended by `agent-manager.randomSuffix`,
+ * This matches the format produced by `slugify` in `core/slug.ts`,
  * so no legitimate Orra-generated ID is rejected.
  */
 const WORKTREE_ID_PATTERN = /^[a-zA-Z0-9][a-zA-Z0-9_-]{0,99}$/;

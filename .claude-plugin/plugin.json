@@ -1,0 +1,9 @@
+{
+  "name": "orra",
+  "version": "1.0.0",
+  "description": "Standing orchestrator + directive/intelligence layer over Claude Code's Agents View",
+  "author": {
+    "name": "Bjorn Olafur",
+    "email": "bjorn.olafur@gmail.com"
+  }
+}

@@ -5,7 +5,6 @@ import * as path from "node:path";
 import {
   type GitState,
   type AgentState,
-  AgentStateSchema,
   type PrState,
   type WorktreeStatus,
   type WorktreeScanEntry,
@@ -14,8 +13,10 @@ import {
 import { loadConfig } from "./config.js";
 import { buildProviders, fetchAndMergeProviders } from "./providers/index.js";
 import type { ProviderWorktree, StageInfo } from "./providers/types.js";
+import { createClaudeDaemonProvider } from "./providers/claude-daemon.js";
 import { loadPipeline, detectStage } from "./pipeline.js";
 import { getOrComputeSummary } from "./summary.js";
+import { parseTranscript } from "./log-parser.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -45,10 +46,7 @@ export function classify(
     return { status: "needs_attention", flags };
   }
 
-  // 1. Pending question
-  if (agent?.pendingQuestion != null) {
-    return { status: "needs_attention", flags };
-  }
+  // 1. (pendingQuestion removed — daemon state uses the "blocked" flag via Rule 0a)
 
   // 2. PR: changes_requested or CI failure
   if (pr != null) {
@@ -78,8 +76,8 @@ export function classify(
     return { status: "needs_attention", flags };
   }
 
-  // 5. Agent running or idle
-  if (agent != null && (agent.status === "running" || agent.status === "idle")) {
+  // 5. Agent running
+  if (agent != null && agent.status === "running") {
     return { status: "in_progress", flags };
   }
 
@@ -179,34 +177,6 @@ export async function scanMarkers(
   return found;
 }
 
-// ─── readAgentState ───────────────────────────────────────────────────────────
-
-function pidIsAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-export async function readAgentState(
-  projectRoot: string,
-  agentId: string
-): Promise<AgentState | null> {
-  const filePath = path.join(projectRoot, ".orra", "agents", `${agentId}.json`);
-  try {
-    const data = await fs.readFile(filePath, "utf-8");
-    const agent = AgentStateSchema.parse(JSON.parse(data));
-    if (agent.status === "running" && !pidIsAlive(agent.pid)) {
-      return { ...agent, status: "interrupted" };
-    }
-    return agent;
-  } catch {
-    return null;
-  }
-}
-
 // ─── enrichWithGitHub ─────────────────────────────────────────────────────────
 
 export async function enrichWithGitHub(
@@ -285,12 +255,12 @@ export async function enrichWithGitHub(
 
 // ─── parseWorktreeList ────────────────────────────────────────────────────────
 
-interface WorktreeInfo {
+export interface WorktreeInfo {
   path: string;
   branch: string;
 }
 
-function parseWorktreeList(stdout: string): WorktreeInfo[] {
+export function parseWorktreeList(stdout: string): WorktreeInfo[] {
   const worktrees: WorktreeInfo[] = [];
   const blocks = stdout.split("\n\n");
   for (const block of blocks) {
@@ -318,7 +288,10 @@ export async function scanAll(projectRoot: string): Promise<ScanResult> {
   const config = await loadConfig(projectRoot);
 
   // Step 1: Fetch providers
-  const providers = buildProviders(config.providers, projectRoot);
+  // Prepend the built-in claude-daemon provider so user-configured providers
+  // can override its agent data (mergeProviderResults: later provider wins for agent).
+  const daemonProvider = createClaudeDaemonProvider();
+  const providers = [daemonProvider, ...buildProviders(config.providers, projectRoot)];
   const { merged: providerData, status: providerStatus } = await fetchAndMergeProviders(
     providers, config.providerCache,
   );
@@ -333,21 +306,56 @@ export async function scanAll(projectRoot: string): Promise<ScanResult> {
   const nativeWorktrees = allWorktrees.filter((wt) => wt.path !== projectRoot);
 
   // Step 3: Build unified worktree list (provider data + native discovery)
-  const worktreeIds = new Set<string>();
+  //
+  // Join strategy: native worktrees (from `git worktree list`) are the authoritative
+  // source of ids (basename of path). Provider data is joined by path. This means the
+  // daemon provider — which uses the full worktree path as its id — gets correctly
+  // associated with the native worktree entry rather than appearing as a separate entry.
+  //
+  // Build a reverse index: path → ProviderWorktree (to support path-based join)
+  const providerByPath = new Map<string, ProviderWorktree>();
+  for (const pWt of providerData.values()) {
+    if (pWt.path) {
+      providerByPath.set(pWt.path, pWt);
+    }
+  }
+
+  const worktreePaths = new Set<string>();
   const worktreesToProcess: Array<{
     id: string; path: string; branch: string; providerData?: ProviderWorktree;
   }> = [];
 
-  for (const [id, pWt] of providerData) {
-    worktreeIds.add(id);
-    worktreesToProcess.push({ id, path: pWt.path, branch: pWt.branch, providerData: pWt });
-  }
-
+  // First pass: native worktrees (authoritative for id + path + branch)
   for (const nwt of nativeWorktrees) {
     const id = worktreeIdFromPath(nwt.path, projectRoot);
-    if (!worktreeIds.has(id)) {
-      worktreeIds.add(id);
-      worktreesToProcess.push({ id, path: nwt.path, branch: nwt.branch });
+    // Look up provider data by path (handles both short ids and full-path ids)
+    const pd = providerData.get(id) ?? providerData.get(nwt.path) ?? providerByPath.get(nwt.path);
+    worktreePaths.add(nwt.path);
+    worktreesToProcess.push({
+      id,
+      path: nwt.path,
+      branch: pd?.branch || nwt.branch,
+      providerData: pd,
+    });
+  }
+
+  // Second pass: provider-only entries (paths not in native worktree list)
+  // Restrict to paths that are sub-directories of projectRoot so the daemon
+  // provider (which returns all jobs globally) doesn't inject entries from
+  // unrelated repos running in the same daemon.
+  const projectRootAbs = path.resolve(projectRoot);
+  for (const pWt of providerData.values()) {
+    if (pWt.path && !worktreePaths.has(pWt.path)) {
+      // Only include paths that live under the current project root.
+      // Use path.relative to safely reject traversals like projectRoot/../other-repo/...
+      const candidateAbs = path.resolve(pWt.path);
+      const rel = path.relative(projectRootAbs, candidateAbs);
+      if (rel.startsWith("..") || path.isAbsolute(rel)) continue;
+      // Provider knows about a path that git worktree list didn't return.
+      // This can happen with stale job records; include them (Step 4 will drop non-existent paths).
+      const id = worktreeIdFromPath(pWt.path, projectRoot);
+      worktreePaths.add(pWt.path);
+      worktreesToProcess.push({ id, path: pWt.path, branch: pWt.branch, providerData: pWt });
     }
   }
 
@@ -377,10 +385,11 @@ export async function scanAll(projectRoot: string): Promise<ScanResult> {
     // Markers: use provider data or scan natively
     const markers = pd?.markers ?? await scanMarkers(wt.path, config.markers);
 
-    // Agent: use provider data or read from .orra/agents/
-    const agent = pd?.agent
-      ? pd.agent as AgentState
-      : await readAgentState(projectRoot, wt.id);
+    // Agent: comes from provider data (the daemon provider now populates this).
+    // If no provider supplied agent data, agent is null.
+    // Note: ProviderWorktree.agent is a .partial() — fields like pid/exitCode/pendingQuestion
+    // may be absent. The cast is intentional; a later task shrinks AgentState to match.
+    const agent = pd?.agent ? (pd.agent as AgentState) : null;
 
     // PR: from provider data (will be filled after GitHub enrichment if null)
     const pr = pd?.pr ?? null;
@@ -415,13 +424,19 @@ export async function scanAll(projectRoot: string): Promise<ScanResult> {
   }
 
   // Step 8: Compute per-agent summary, then classify
-  const orraAgentsDir = path.join(projectRoot, ".orra", "agents");
+  const agentsSummaryDir = path.join(projectRoot, ".orra", "agents-summary");
   const now = () => new Date();
 
   const entries: WorktreeScanEntry[] = await Promise.all(enriched.map(async (wt) => {
+    const transcriptPath = typeof wt.extras?.linkScanPath === "string"
+      ? wt.extras.linkScanPath
+      : "";
     const summary = wt.agent
-      ? await getOrComputeSummary(wt.agent.id, wt.agent, { stateDir: orraAgentsDir, now })
-          .catch(() => undefined)
+      ? await getOrComputeSummary(wt.agent.id, wt.agent, {
+          transcriptPath,
+          stateDir: agentsSummaryDir,
+          now,
+        }).catch(() => undefined)
       : undefined;
 
     const { status, flags } = classify(
@@ -507,19 +522,15 @@ export async function inspectOne(
     }
   }
 
-  // Agent output tail (last 50 lines)
+  // Agent output tail: parse the daemon transcript jsonl (linkScanPath).
+  // Transcript parsing is optional metadata — wrap in try/catch so a corrupt
+  // or missing file doesn't abort the entire inspectOne call.
   let agentOutputTail = "";
-  if (entry.agent) {
+  const linkScanPath = entry.extras?.linkScanPath;
+  if (typeof linkScanPath === "string" && linkScanPath) {
     try {
-      const logPath = path.join(
-        projectRoot,
-        ".orra",
-        "agents",
-        `${entry.agent.id}.log`
-      );
-      const content = await fs.readFile(logPath, "utf-8");
-      const lines = content.split("\n").filter((l) => l.length > 0);
-      agentOutputTail = lines.slice(-50).join("\n");
+      const parsed = await parseTranscript(linkScanPath);
+      agentOutputTail = parsed.tailLines.join("\n");
     } catch {
       agentOutputTail = "";
     }

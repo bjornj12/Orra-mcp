@@ -1,52 +1,36 @@
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
-import { parseLog, type LogSignals } from "./log-parser.js";
+import { parseTranscript, type LogSignals } from "./log-parser.js";
 import type { AgentState, AgentSummary } from "../types.js";
 
 export const CURRENT_SUMMARY_SCHEMA_VERSION = 1 as const;
-export const MAX_TAIL_BYTES = 64 * 1024;
 
 export interface SummaryComputeDeps {
+  /** Path to the Claude Code session transcript `.jsonl` file. */
+  transcriptPath: string;
+  /**
+   * Directory where summary cache files are written.
+   * Typically `<projectRoot>/.orra/agents-summary/`.
+   */
   stateDir: string;
   now: () => Date;
-}
-
-function logPath(stateDir: string, agentId: string): string {
-  return path.join(stateDir, `${agentId}.log`);
 }
 
 function summaryPath(stateDir: string, agentId: string): string {
   return path.join(stateDir, `${agentId}.summary.json`);
 }
 
-export async function readLogTail(file: string): Promise<{ text: string; mtime: Date } | null> {
-  let stat;
-  try {
-    stat = await fs.stat(file);
-  } catch {
-    return null;
-  }
-  const size = stat.size;
-  const start = Math.max(0, size - MAX_TAIL_BYTES);
-  const handle = await fs.open(file, "r");
-  try {
-    const length = size - start;
-    const buffer = Buffer.alloc(length);
-    await handle.read(buffer, 0, length, start);
-    return { text: buffer.toString("utf-8"), mtime: stat.mtime };
-  } finally {
-    await handle.close();
-  }
-}
-
 function buildOneLine(agent: AgentState, signals: LogSignals): string {
-  if (agent.pendingQuestion) {
-    return `awaiting permission: ${agent.pendingQuestion.tool}`;
+  // pendingQuestion removed from AgentState — blocked state surfaced via daemon "blocked" flag
+  if (agent.status === "waiting") {
+    return "agent is waiting (blocked on input)";
   }
   if (signals.lastTestResult === "fail") return "last test run failed";
   if (signals.lastTestResult === "pass") return "last test run passed";
   if (signals.lastFileEdited) return `editing ${signals.lastFileEdited}`;
   if (signals.tailLines.length > 0) return signals.tailLines[signals.tailLines.length - 1].slice(0, 120);
+  // Fallback: use daemon detail field if available
+  if (agent.detail) return agent.detail;
   return `agent status: ${agent.status}`;
 }
 
@@ -56,10 +40,9 @@ function scoreSummary(
   now: Date,
 ): number {
   let score = 0;
-  if (agent.pendingQuestion) score += 50;
-  if (agent.status === "waiting") score += 40;
+  // "waiting" = daemon blocked state (previously pendingQuestion)
+  if (agent.status === "waiting") score += 50;
   if (agent.status === "failed") score += 40;
-  if (agent.status === "interrupted") score += 30;
   if (signals.lastTestResult === "fail") score += 20;
   if (signals.loopDetected) score += 15;
   if (signals.errorPattern) score += 15;
@@ -79,12 +62,13 @@ function deriveStuckReason(
   signals: LogSignals,
   now: Date,
 ): string | null {
-  if (agent.pendingQuestion) return `awaiting permission: ${agent.pendingQuestion.tool}`;
+  // "waiting" status = daemon blocked state
+  if (agent.status === "waiting") return "agent is waiting (blocked on input — use claude attach)";
   if (signals.loopDetected) return "loop: same line repeats in tail";
-  // "Stuck on X" only makes sense for an agent that's still trying. A failed,
-  // interrupted, or completed agent isn't stuck — it's done. The error pattern
-  // still contributes to needsAttentionScore via scoreSummary; we just don't
-  // label the agent as currently blocked by it.
+  // "Stuck on X" only makes sense for an agent that's still trying. A failed
+  // or completed agent isn't stuck — it's done. The error pattern still
+  // contributes to needsAttentionScore via scoreSummary; we just don't label
+  // the agent as currently blocked by it.
   if (signals.errorPattern && agent.status === "running") {
     return `stuck on ${signals.errorPattern}`;
   }
@@ -113,9 +97,9 @@ async function tryReadCachedSummary(
   }
 }
 
-async function currentLogMtime(stateDir: string, agentId: string): Promise<string | null> {
+async function currentTranscriptMtime(transcriptPath: string): Promise<string | null> {
   try {
-    const s = await fs.stat(logPath(stateDir, agentId));
+    const s = await fs.stat(transcriptPath);
     return s.mtime.toISOString();
   } catch {
     return null;
@@ -134,35 +118,39 @@ async function computeFresh(
   agent: AgentState,
   deps: SummaryComputeDeps,
 ): Promise<AgentSummary> {
-  const logFile = logPath(deps.stateDir, agentId);
-  const tail = await readLogTail(logFile);
+  const signals: LogSignals = await parseTranscript(deps.transcriptPath);
 
-  const signals: LogSignals = tail
-    ? parseLog(tail.text)
-    : {
-        lastFileEdited: null,
-        lastTestResult: "unknown",
-        errorPattern: null,
-        loopDetected: false,
-        tailLines: [],
-      };
+  // Use lastActivityAt from transcript if available; fall back to transcript mtime
+  let lastActivityAt: string | null = signals.lastActivityAt;
+  if (!lastActivityAt) {
+    try {
+      const s = await fs.stat(deps.transcriptPath);
+      lastActivityAt = s.mtime.toISOString();
+    } catch {
+      lastActivityAt = null;
+    }
+  }
 
   const now = deps.now();
+  const mtime = await currentTranscriptMtime(deps.transcriptPath);
+
   const summary: AgentSummary = {
     agentId,
     summarizedAt: now.toISOString(),
-    logMtime: tail ? tail.mtime.toISOString() : "",
+    logMtime: mtime ?? "",
     schemaVersion: CURRENT_SUMMARY_SCHEMA_VERSION,
     oneLine: buildOneLine(agent, signals),
     needsAttentionScore: scoreSummary(agent, signals, now),
     likelyStuckReason: deriveStuckReason(agent, signals, now),
     lastTestResult: signals.lastTestResult,
     lastFileEdited: signals.lastFileEdited,
-    lastActivityAt: tail ? tail.mtime.toISOString() : null,
+    lastActivityAt,
     tailLines: signals.tailLines,
   };
 
+  // Ensure the stateDir exists before writing
   try {
+    await fs.mkdir(deps.stateDir, { recursive: true });
     await writeSummaryAtomic(summaryPath(deps.stateDir, agentId), summary);
   } catch {
     // Disk full / permissions — return the in-memory summary anyway.
@@ -178,7 +166,7 @@ export async function getOrComputeSummary(
 ): Promise<AgentSummary> {
   const [cached, mtime] = await Promise.all([
     tryReadCachedSummary(deps.stateDir, agentId),
-    currentLogMtime(deps.stateDir, agentId),
+    currentTranscriptMtime(deps.transcriptPath),
   ]);
 
   if (cached && mtime && cached.logMtime === mtime) {

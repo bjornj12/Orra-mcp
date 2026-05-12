@@ -53,11 +53,12 @@ describe("handleOrraSetup — memory scaffold", () => {
     expect(content).toContain("This file is managed by Orra directives");
   });
 
-  it("writes headlessSpawnConcurrency: 3 to the new config", async () => {
+  it("writes worktreeDir: worktrees to the new config", async () => {
     await handleOrraSetup(tmpDir);
     const configPath = path.join(tmpDir, ".orra", "config.json");
     const raw = await fs.readFile(configPath, "utf-8");
     const config = JSON.parse(raw);
-    expect(config.headlessSpawnConcurrency).toBe(3);
+    expect(config.worktreeDir).toBe("worktrees");
+    expect(config).not.toHaveProperty("headlessSpawnConcurrency");
   });
 });

@@ -1,16 +1,36 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import * as os from "node:os";
 import { orraScanSchema, handleOrraScan } from "../../../src/tools/orra-scan.js";
-import { orraRegisterSchema, handleOrraRegister } from "../../../src/tools/orra-register.js";
-import { orraUnblockSchema, handleOrraUnblock } from "../../../src/tools/orra-unblock.js";
-import { orraKillSchema, handleOrraKill } from "../../../src/tools/orra-kill.js";
-import { orraRebaseSchema, handleOrraRebase } from "../../../src/tools/orra-rebase.js";
 import { orraSetupSchema, handleOrraSetup } from "../../../src/tools/orra-setup.js";
 import { orraDirectiveSchema, handleOrraDirective } from "../../../src/tools/orra-directive.js";
-import { orraSpawnSchema, handleOrraSpawn } from "../../../src/tools/orra-spawn.js";
-import { AgentManager } from "../../../src/core/agent-manager.js";
+
+// Mock claude-cli so spawn/kill don't try to exec real processes
+vi.mock("../../../src/core/claude-cli.js", () => ({
+  bgSpawn: vi.fn(async () => ({ shortId: "deadbeef", raw: "backgrounded · deadbeef" })),
+  stopSession: vi.fn(async () => undefined),
+  removeSession: vi.fn(async () => undefined),
+  buildBgArgs: vi.fn(() => []),
+  claudeVersion: vi.fn(async () => "2.1.139"),
+}));
+
+vi.mock("../../../src/core/daemon-state.js", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("../../../src/core/daemon-state.js")>();
+  return {
+    ...actual,
+    readJobState: vi.fn(async () => null),
+    readJobs: vi.fn(async () => []),
+    configDir: vi.fn(() => "/tmp/fake-claude-config"),
+  };
+});
+
+import { handleOrraSpawn } from "../../../src/tools/orra-spawn.js";
+import { handleOrraKill } from "../../../src/tools/orra-kill.js";
+import { handleOrraRebase } from "../../../src/tools/orra-rebase.js";
+import { recordSpawn } from "../../../src/core/state.js";
+
+// orra_register and orra_unblock have been deleted (Task 8).
 
 async function withTmp<T>(fn: (tmp: string) => Promise<T>): Promise<T> {
   const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "orra-env-"));
@@ -30,6 +50,10 @@ function assertCompactEnvelope(text: string) {
 }
 
 describe("envelope sweep", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
   it("orra_scan returns compact JSON with ok/data envelope", async () => {
     await withTmp(async (tmp) => {
       const res = await handleOrraScan(tmp, orraScanSchema.parse({}));
@@ -39,50 +63,6 @@ describe("envelope sweep", () => {
       expect(body).toHaveProperty("ok");
       if (body.ok) expect(body).toHaveProperty("data");
       else expect(body).toHaveProperty("error");
-    });
-  });
-
-  it("orra_register returns compact envelope", async () => {
-    await withTmp(async (tmp) => {
-      const res = await handleOrraRegister(
-        tmp,
-        orraRegisterSchema.parse({ worktree: "not-a-real-worktree" }),
-      );
-      assertCompactEnvelope(res.content[0].text);
-    });
-  });
-
-  it("orra_unblock returns compact envelope", async () => {
-    await withTmp(async (tmp) => {
-      await fs.mkdir(path.join(tmp, ".orra", "agents"), { recursive: true });
-      const res = await handleOrraUnblock(
-        tmp,
-        orraUnblockSchema.parse({ worktree: "feat-foo", allow: true }),
-      );
-      assertCompactEnvelope(res.content[0].text);
-    });
-  });
-
-  it("orra_kill returns compact envelope", async () => {
-    await withTmp(async (tmp) => {
-      const manager = new AgentManager(tmp);
-      const res = await handleOrraKill(
-        manager,
-        orraKillSchema.parse({ worktree: "feat-foo" }),
-      );
-      assertCompactEnvelope(res.content[0].text);
-    });
-  });
-
-  it("orra_rebase returns compact envelope", async () => {
-    await withTmp(async (tmp) => {
-      const manager = new AgentManager(tmp);
-      const res = await handleOrraRebase(
-        manager,
-        tmp,
-        orraRebaseSchema.parse({ worktree: "feat-foo" }),
-      );
-      assertCompactEnvelope(res.content[0].text);
     });
   });
 
@@ -105,16 +85,45 @@ describe("envelope sweep", () => {
 
   it("orra_spawn returns compact envelope", async () => {
     await withTmp(async (tmp) => {
-      const manager = new AgentManager(tmp);
-      const res = await handleOrraSpawn(
-        manager,
-        orraSpawnSchema.parse({
-          task: "noop",
-          reason: "envelope sweep smoke test",
-          worktree: "no-such-worktree",
-        }),
-      );
-      assertCompactEnvelope(res.content[0].text);
+      const res = await handleOrraSpawn(tmp, { task: "do work", reason: "test" });
+      const body = assertCompactEnvelope(res.content[0].text);
+      expect(body.ok).toBe(true);
+    });
+  });
+
+  it("orra_kill returns fail envelope when agent not found", async () => {
+    await withTmp(async (tmp) => {
+      const res = await handleOrraKill(tmp, { agent: "not-a-real-agent" });
+      const body = assertCompactEnvelope(res.content[0].text);
+      expect(body.ok).toBe(false);
+    });
+  });
+
+  it("orra_kill returns ok envelope when agent found via ledger", async () => {
+    await withTmp(async (tmp) => {
+      // Seed a spawn ledger entry
+      await recordSpawn(tmp, {
+        shortId: "deadbeef",
+        sessionId: "deadbeef-session",
+        slug: "do-work",
+        task: "do work",
+        reason: "test",
+        spawnedBy: "orchestrator",
+      });
+      const res = await handleOrraKill(tmp, { agent: "deadbeef" });
+      const body = assertCompactEnvelope(res.content[0].text);
+      expect(body.ok).toBe(true);
+    });
+  });
+
+  it("orra_rebase returns compact envelope (worktree not found → fail)", async () => {
+    await withTmp(async (tmp) => {
+      // Initialize a minimal git repo so the git worktree list command works
+      const { execSync } = await import("node:child_process");
+      execSync("git init", { cwd: tmp, stdio: "pipe" });
+      const res = await handleOrraRebase(tmp, { worktree: "nonexistent-wt" });
+      const body = assertCompactEnvelope(res.content[0].text);
+      expect(body.ok).toBe(false);
     });
   });
 });

@@ -13,7 +13,6 @@ const DEFAULTS = {
   defaultAgent: null,
   providers: [],
   providerCache: { ttl: 5000 },
-  headlessSpawnConcurrency: 3,
 };
 
 async function makeTmpDir(): Promise<string> {
