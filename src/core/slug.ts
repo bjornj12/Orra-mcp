@@ -13,10 +13,12 @@
  * - truncates to 40 characters
  */
 export function slugify(input: string): string {
-  return input
+  const slug = input
     .toLowerCase()
     .replace(/[^a-z0-9\s-]/g, "")
     .replace(/[\s-]+/g, "-")
     .replace(/^-+|-+$/g, "")
     .slice(0, 40);
+  // Fall back to a safe non-empty default so the result always satisfies isSafeWorktreeId
+  return slug || "agent";
 }

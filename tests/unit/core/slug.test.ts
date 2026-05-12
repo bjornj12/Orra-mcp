@@ -22,4 +22,24 @@ describe("slugify", () => {
     const long = "a".repeat(60);
     expect(slugify(long).length).toBeLessThanOrEqual(40);
   });
+
+  it("should handle empty input gracefully", () => {
+    const result = slugify("");
+    expect(result).toBeTruthy();
+    expect(result.length).toBeGreaterThan(0);
+  });
+
+  it("should handle inputs that would produce empty slugs", () => {
+    expect(slugify("...")).toBeTruthy();
+    expect(slugify("!!!")).toBeTruthy();
+    expect(slugify("___")).toBeTruthy();
+  });
+
+  it("should return isSafeWorktreeId-valid output for degenerate inputs", () => {
+    // These all strip to empty after processing; the fallback must be safe.
+    for (const input of ["", "...", "!!!", "___"]) {
+      const result = slugify(input);
+      expect(result).toMatch(/^[a-zA-Z0-9][a-zA-Z0-9_-]{0,99}$/);
+    }
+  });
 });

@@ -66,7 +66,7 @@ Directives live in `.orra/directives/*.md` (read them each tick). Memory lives i
 4. **Scan worktrees**: Call `orra_scan`. **Skip this step** if a session-start directive that already fired in step 3 performed the scan (e.g., `morning-briefing` calls `orra_scan` as its first action — do not call it again). Present results grouped by status:
 
 - **Ready to Land** — PRs approved, CI green, mergeable
-- **Needs Attention** — Agents blocked (`state: "blocked"`), PRs with change requests, CI failing; hint: `claude attach <shortId>` or `claude --bg --resume <shortId> "<answer>"`
+- **Needs Attention** — Agents waiting for input (`agent.status === "waiting"` or `flags` includes `"blocked"`), PRs with change requests, CI failing; hint: `claude attach <shortId>` or `claude --bg --resume <shortId> "<answer>"`
 - **In Progress** — Agents actively working (`state: "running"`)
 - **Idle** — Worktrees with work but no active agent
 - **Stale** — No activity for multiple days
@@ -188,7 +188,7 @@ If the user's most recent non-heartbeat turn was `stop heartbeat` or just `stop`
 
 After presenting status, suggest concrete actions:
 
-- Triage agents with `state: "blocked"` — read the detail/transcript tail via `orra_inspect`, then either `claude --bg --resume <shortId> "<known answer>"` for routine patterns, or `claude attach <shortId>` for decisions that need human judgment.
+- Triage agents with `agent.status === "waiting"` (or `flags` includes `"blocked"`) — read the detail/transcript tail via `orra_inspect`, then either `claude --bg --resume <shortId> "<known answer>"` for routine patterns, or `claude attach <shortId>` for decisions that need human judgment.
 - Rebase worktrees with high drift (use `orra_rebase` or `orra_spawn` with a rebase task).
 - Merge worktrees that are ready to land.
 - Spawn helper bg agents for routine maintenance (see below).
@@ -220,7 +220,7 @@ orra_spawn({
 
 - Use `disallowedTools` to restrict what a spawned agent can do (e.g. `["Bash"]` for read-only tasks). Note: `--disallowed-tools` is what actually blocks a tool in headless mode; `--allowed-tools` is only an auto-approve add-on.
 - For tasks that need broader permissions, pass `allowedTools` as a per-call override — but only with explicit user permission.
-- If a spawned agent gets stuck, `orra_scan` will show it as `needs_attention` with `state: "blocked"`. Triage it with `orra_inspect` then resume or attach.
+- If a spawned agent gets stuck, `orra_scan` will show it as `needs_attention` with `agent.status === "waiting"` and `flags` including `"blocked"`. Triage it with `orra_inspect` then resume or attach.
 
 ## Pipeline Stages
 

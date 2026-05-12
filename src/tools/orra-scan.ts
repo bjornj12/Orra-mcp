@@ -12,13 +12,18 @@ export async function handleOrraScan(
   projectRoot: string,
   args: z.infer<typeof orraScanSchema> = {},
 ) {
-  // Soft preflight: scan still works off git worktree list alone when the daemon
-  // is unavailable. Include a warning in the payload so callers know agent-view
-  // data is absent.
-  const pf = await checkAgentsViewAvailable();
-  const agentsViewUnavailable = pf.ok ? undefined : pf.reason;
-
   try {
+    // Soft preflight: scan still works off git worktree list alone when the daemon
+    // is unavailable. Include a warning in the payload so callers know agent-view
+    // data is absent. The preflight itself is wrapped here so a thrown exception
+    // degrades to a warning rather than failing the whole scan.
+    let agentsViewUnavailable: string | undefined;
+    try {
+      const pf = await checkAgentsViewAvailable();
+      agentsViewUnavailable = pf.ok ? undefined : pf.reason;
+    } catch (pfErr) {
+      agentsViewUnavailable = pfErr instanceof Error ? pfErr.message : String(pfErr);
+    }
     const result = await scanAll(projectRoot);
     const entries = filterScanEntries(
       (result as unknown as { worktrees: Array<Record<string, unknown>> }).worktrees ??

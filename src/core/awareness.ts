@@ -343,11 +343,14 @@ export async function scanAll(projectRoot: string): Promise<ScanResult> {
   // Restrict to paths that are sub-directories of projectRoot so the daemon
   // provider (which returns all jobs globally) doesn't inject entries from
   // unrelated repos running in the same daemon.
-  const projectRootNorm = projectRoot.endsWith(path.sep) ? projectRoot : projectRoot + path.sep;
+  const projectRootAbs = path.resolve(projectRoot);
   for (const pWt of providerData.values()) {
     if (pWt.path && !worktreePaths.has(pWt.path)) {
       // Only include paths that live under the current project root.
-      if (!pWt.path.startsWith(projectRootNorm)) continue;
+      // Use path.relative to safely reject traversals like projectRoot/../other-repo/...
+      const candidateAbs = path.resolve(pWt.path);
+      const rel = path.relative(projectRootAbs, candidateAbs);
+      if (rel.startsWith("..") || path.isAbsolute(rel)) continue;
       // Provider knows about a path that git worktree list didn't return.
       // This can happen with stale job records; include them (Step 4 will drop non-existent paths).
       const id = worktreeIdFromPath(pWt.path, projectRoot);
@@ -520,11 +523,17 @@ export async function inspectOne(
   }
 
   // Agent output tail: parse the daemon transcript jsonl (linkScanPath).
+  // Transcript parsing is optional metadata — wrap in try/catch so a corrupt
+  // or missing file doesn't abort the entire inspectOne call.
   let agentOutputTail = "";
   const linkScanPath = entry.extras?.linkScanPath;
   if (typeof linkScanPath === "string" && linkScanPath) {
-    const parsed = await parseTranscript(linkScanPath);
-    agentOutputTail = parsed.tailLines.join("\n");
+    try {
+      const parsed = await parseTranscript(linkScanPath);
+      agentOutputTail = parsed.tailLines.join("\n");
+    } catch {
+      agentOutputTail = "";
+    }
   }
 
   // Conflict files (modified in both branch and main since merge-base)

@@ -62,22 +62,26 @@ export async function handleOrraKill(
 
     const cleanup = args.cleanup ?? false;
 
+    // Resolve PR branch hint BEFORE destructive cleanup: removeSession deletes
+    // the daemon job state, so worktreeBranch becomes unavailable afterwards.
+    let branch: string | null = null;
+    if (cleanup) {
+      const jobs = await readJobs(configDir());
+      const job = jobs.find((j) => j.daemonShort === shortId);
+      branch = job?.worktreeBranch ?? null;
+    }
+
     if (cleanup) {
       await removeSession(shortId);
     } else {
       await stopSession(shortId);
     }
 
-    // PR cleanup: if the spawn ledger has a branch name, try to close the PR.
+    // PR cleanup: if we found a branch name, try to close the PR.
     // This is best-effort — we don't fail the kill if gh is unavailable.
     const ledger = await readSpawnLedger(projectRoot);
     const entry = ledger.find((e) => e.shortId === shortId);
     if (cleanup && entry) {
-      // The slug can be used as a branch hint; if the job had an explicit branch, use that.
-      // We look up the daemon job to see if there's a worktreeBranch.
-      const jobs = await readJobs(configDir());
-      const job = jobs.find((j) => j.daemonShort === shortId);
-      const branch = job?.worktreeBranch ?? null;
       if (branch && isSafeBranchName(branch)) {
         try {
           const { execFile } = await import("node:child_process");

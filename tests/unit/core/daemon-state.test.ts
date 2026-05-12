@@ -69,17 +69,23 @@ describe("daemon-state", () => {
 
   it("configDir honors CLAUDE_CONFIG_DIR", () => {
     const prev = process.env.CLAUDE_CONFIG_DIR;
-    process.env.CLAUDE_CONFIG_DIR = "/custom/dir";
-    expect(configDir()).toBe("/custom/dir");
-    if (prev === undefined) delete process.env.CLAUDE_CONFIG_DIR;
-    else process.env.CLAUDE_CONFIG_DIR = prev;
+    try {
+      process.env.CLAUDE_CONFIG_DIR = "/custom/dir";
+      expect(configDir()).toBe("/custom/dir");
+    } finally {
+      if (prev === undefined) delete process.env.CLAUDE_CONFIG_DIR;
+      else process.env.CLAUDE_CONFIG_DIR = prev;
+    }
   });
 
   it("configDir defaults to ~/.claude", () => {
     const prev = process.env.CLAUDE_CONFIG_DIR;
-    delete process.env.CLAUDE_CONFIG_DIR;
-    expect(configDir()).toBe(path.join(os.homedir(), ".claude"));
-    if (prev !== undefined) process.env.CLAUDE_CONFIG_DIR = prev;
+    try {
+      delete process.env.CLAUDE_CONFIG_DIR;
+      expect(configDir()).toBe(path.join(os.homedir(), ".claude"));
+    } finally {
+      if (prev !== undefined) process.env.CLAUDE_CONFIG_DIR = prev;
+    }
   });
 
   it("readRoster parses workers", async () => {

@@ -184,12 +184,15 @@ describe("getOrComputeSummary — cache hit", () => {
       now: () => new Date("2026-04-13T10:00:00.000Z"),
     });
 
-    // Wait a tick, then overwrite with new content
-    await new Promise((r) => setTimeout(r, 20));
+    // Overwrite with new content, then advance mtime deterministically so the
+    // cache invalidation check sees a newer file regardless of filesystem mtime
+    // granularity (avoids 20ms sleep that flakes on 1s-granularity filesystems).
     await fs.writeFile(
       transcriptPath,
       makeToolResultLine("Tests: 1 failed, 2 total"),
     );
+    const futureTime = new Date(Date.now() + 2000);
+    await fs.utimes(transcriptPath, futureTime, futureTime);
 
     const second = await getOrComputeSummary("agent-1", fakeAgent, {
       transcriptPath,

@@ -172,6 +172,16 @@ function rosterWorkerToProviderWorktree(
 }
 
 // ---------------------------------------------------------------------------
+// Timestamp helpers
+// ---------------------------------------------------------------------------
+
+/** Parse an ISO timestamp to a numeric epoch; returns 0 for missing/invalid values. */
+function ts(v: string | undefined): number {
+  const n = v ? Date.parse(v) : NaN;
+  return Number.isFinite(n) ? n : 0;
+}
+
+// ---------------------------------------------------------------------------
 // Factory
 // ---------------------------------------------------------------------------
 
@@ -208,7 +218,17 @@ export function createClaudeDaemonProvider(opts?: { configDir?: string }): State
       for (const job of jobs) {
         const wt = jobToProviderWorktree(job);
         if (wt.id) {
-          worktreeMap.set(wt.id, wt);
+          // Deduplicate same-path jobs by recency: keep the most recently updated entry.
+          const prev = worktreeMap.get(wt.id);
+          if (!prev) {
+            worktreeMap.set(wt.id, wt);
+          } else {
+            const prevUpdated = ts(prev.agent?.updatedAt as string | undefined);
+            const nextUpdated = ts(wt.agent?.updatedAt as string | undefined);
+            if (nextUpdated >= prevUpdated) {
+              worktreeMap.set(wt.id, wt);
+            }
+          }
         }
         if (job.daemonShort) {
           coveredShorts.add(job.daemonShort);

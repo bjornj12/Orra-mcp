@@ -14,7 +14,7 @@ import { handleOrraRebase } from "../../../src/tools/orra-rebase.js";
 
 /** Create a minimal git repo with an initial commit. */
 function initRepo(dir: string) {
-  execSync("git init", { cwd: dir, stdio: "pipe" });
+  execSync("git init -b main", { cwd: dir, stdio: "pipe" });
   execSync("git config user.email 'test@test.com'", { cwd: dir, stdio: "pipe" });
   execSync("git config user.name 'Test'", { cwd: dir, stdio: "pipe" });
   fs.writeFileSync(path.join(dir, "README.md"), "# init\n");

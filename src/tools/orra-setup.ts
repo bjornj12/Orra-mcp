@@ -68,10 +68,13 @@ export async function handleOrraSetup(projectRoot: string, _args?: z.infer<typeo
   }
 
   // 5. Ensure the Orra MCP server entry exists in .mcp.json (merge, don't clobber)
+  const asObject = (v: unknown): Record<string, unknown> =>
+    v !== null && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
+
   const mcpPath = path.join(projectRoot, ".mcp.json");
   let mcpConfig: Record<string, unknown> = {};
   if (fs.existsSync(mcpPath)) {
-    try { mcpConfig = JSON.parse(await fsp.readFile(mcpPath, "utf8")); } catch { /* start fresh */ }
+    try { mcpConfig = asObject(JSON.parse(await fsp.readFile(mcpPath, "utf8"))); } catch { /* start fresh */ }
   }
   const ORRA_KEY = "orra";
   if (!mcpConfig[ORRA_KEY] && !mcpConfig["orra-mcp"]) {
@@ -96,7 +99,7 @@ export async function handleOrraSetup(projectRoot: string, _args?: z.infer<typeo
   const settingsPath = path.join(projectRoot, ".claude", "settings.json");
   let existing: Record<string, any> = {};
   if (fs.existsSync(settingsPath)) {
-    try { existing = JSON.parse(await fsp.readFile(settingsPath, "utf8")); } catch { /* start fresh */ }
+    try { existing = asObject(JSON.parse(await fsp.readFile(settingsPath, "utf8"))); } catch { /* start fresh */ }
   }
   existing.hooks = existing.hooks ?? {};
 

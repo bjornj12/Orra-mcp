@@ -24,7 +24,7 @@ For anything **outside** the allowlist, the directive proposes the spawn and ask
 
 Before spawning, check how many `orra_spawn`-originated agents are already running. `orra_scan`
 entries carry provenance: entries whose `summary.oneLine` references an Orra-spawned session or
-whose `agent.name` matches a spawn ledger entry in `.orra/spawns/` are "auto-spawned". If 3 or
+whose `agent.id`/`agent.shortId`/`agent.sessionId` matches a spawn ledger entry in `.orra/spawns/` are "auto-spawned". If 3 or
 more are currently `running`, queue the suggestion for the next scan instead of spawning. Surface
 a brief note:
 

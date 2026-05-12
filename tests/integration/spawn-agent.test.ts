@@ -124,8 +124,11 @@ describe("orra_spawn — real integration", () => {
 
         // Wait for the job to finish — use the real configDir()
         const outcome = await pollUntilTerminal(configDir(), shortId, 25_000);
-        // Accept any terminal state or timeout (CI environments vary in speed)
-        expect(["done", "failed", undefined]).toContain(outcome.state);
+        // Timeout is a real failure: the spawned agent must reach a terminal state.
+        if (outcome.timed_out) {
+          throw new Error(`agent ${shortId} did not reach a terminal state within 25s`);
+        }
+        expect(["done", "failed"]).toContain(outcome.state);
       } finally {
         await fsp.rm(repo, { recursive: true, force: true });
       }

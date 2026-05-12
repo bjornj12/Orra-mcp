@@ -2,6 +2,14 @@ import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import { atomicWriteFile } from "./atomic-write.js";
 import { SpawnLedgerEntrySchema, type SpawnLedgerEntry } from "../types.js";
+import { isSafeWorktreeId } from "./validation.js";
+
+function assertSafeId(id: string): string {
+  if (!isSafeWorktreeId(id)) {
+    throw new Error(`Invalid identifier: ${JSON.stringify(id)}`);
+  }
+  return id;
+}
 
 export class StateManager {
   private orraDir: string;
@@ -17,12 +25,12 @@ export class StateManager {
   async appendLog(id: string, content: string): Promise<void> {
     const agentsDir = path.join(this.orraDir, "agents");
     await fs.mkdir(agentsDir, { recursive: true });
-    const filePath = path.join(agentsDir, `${id}.log`);
+    const filePath = path.join(agentsDir, `${assertSafeId(id)}.log`);
     await fs.appendFile(filePath, content);
   }
 
   async readLog(id: string, tail?: number): Promise<string> {
-    const filePath = path.join(this.orraDir, "agents", `${id}.log`);
+    const filePath = path.join(this.orraDir, "agents", `${assertSafeId(id)}.log`);
     try {
       const content = await fs.readFile(filePath, "utf-8");
       if (tail === undefined) {
@@ -36,7 +44,7 @@ export class StateManager {
   }
 
   async readLogRange(id: string, offset: number): Promise<{ content: string; newOffset: number }> {
-    const filePath = path.join(this.orraDir, "agents", `${id}.log`);
+    const filePath = path.join(this.orraDir, "agents", `${assertSafeId(id)}.log`);
     try {
       const stat = await fs.stat(filePath);
       const fileSize = stat.size;
@@ -76,7 +84,7 @@ export async function recordSpawn(
     ...entry,
     spawnedAt: new Date().toISOString(),
   };
-  const filePath = path.join(dir, `${entry.shortId}.json`);
+  const filePath = path.join(dir, `${assertSafeId(entry.shortId)}.json`);
   await atomicWriteFile(filePath, JSON.stringify(full, null, 2));
 }
 
@@ -105,7 +113,7 @@ export async function readSpawn(
   projectRoot: string,
   shortId: string,
 ): Promise<SpawnLedgerEntry | null> {
-  const filePath = path.join(spawnsDir(projectRoot), `${shortId}.json`);
+  const filePath = path.join(spawnsDir(projectRoot), `${assertSafeId(shortId)}.json`);
   try {
     const raw = await fs.readFile(filePath, "utf-8");
     return SpawnLedgerEntrySchema.parse(JSON.parse(raw));
