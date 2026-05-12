@@ -23,7 +23,7 @@ Do NOT interrupt the user if they're actively working. Only surface suggestions 
 
 Check these sources in order, return the first good hit:
 
-1. **Blocked agents needing unblock.** Run `orra_scan`. If any other agent has a `pendingQuestion`, that's the highest-priority gap-filler — unblocking takes 30 seconds and removes a blocker.
+1. **Blocked agents needing triage.** Run `orra_scan`. If any other agent has `flags` including `"blocked"` or `status === "waiting"`, that's the highest-priority gap-filler — triaging takes 30 seconds and unblocks the agent. Use `claude --bg --resume <shortId> "<answer>"` for routine patterns, or `claude attach <shortId>` for decisions needing judgment.
 
 2. **Overdue commitments.** Read `.orra/memory/commitments.md`. If anything is Overdue, suggest dealing with the smallest or the most urgent one.
 
@@ -71,7 +71,7 @@ The heartbeat invocation lowers the threshold from the normal "only on idle user
 When woken:
 
 1. Walk the same source hierarchy as the normal invocation, in order, and return the first good hit:
-   1. **Blocked agents needing unblock** — `orra_scan` for any agent with a `pendingQuestion`.
+   1. **Blocked agents needing triage** — `orra_scan` for any agent with `flags` including `"blocked"`. Use `claude --bg --resume <shortId> "<answer>"` for routine answers, or `claude attach <shortId>` for human decisions.
    2. **Overdue commitments** — `.orra/memory/commitments.md`, the "Overdue" section.
    3. **Approved-but-unmerged PRs** — from `orra_scan`, worktrees in `ready_to_land`.
    4. **Pending PR reviews assigned to the user** — `gh pr list --search "is:pr is:open review-requested:@me"`. Prefer the smallest/oldest one.

@@ -61,7 +61,7 @@ When the dispatcher wakes this directive with `since=<timestamp>`, do NOT re-run
 1. Call `orra_scan`. Find worktrees whose `status === "stale"`.
 
 2. For each, determine whether it transitioned to `stale` since `since`. A worktree transitioned when:
-   - Its last activity timestamp (most recent commit, most recent agent log write under `.orra/agents/`, most recent file edit in the worktree) is older than the stale threshold (typically multiple days), AND
+   - Its last activity timestamp (most recent commit, most recent daemon job `updatedAt` from `orra_scan`, most recent file edit in the worktree) is older than the stale threshold (typically multiple days), AND
    - At `since`, the same worktree's last-activity-vs-now delta would have still been under the stale threshold. In other words, the boundary was crossed between `since` and `now`.
 
    Practically: if the worktree's last-activity timestamp is strictly between `now - stale_threshold - (now - since)` and `now - stale_threshold`, it aged into `stale` inside this window. Older than that and it was already stale at `since` — a previous tick already had its chance to flag it, stay silent.

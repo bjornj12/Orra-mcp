@@ -6,7 +6,7 @@ cache_schema:
 escalate_when:
   - "status == waiting"
   - "attention_score >= 60"
-allowed_tools: ["mcp__orra__orra_scan", "mcp__orra__orra_inspect", "mcp__orra__orra_unblock", "mcp__orra__orra_cache_write"]
+allowed_tools: ["mcp__orra__orra_scan", "mcp__orra__orra_inspect", "mcp__orra__orra_cache_write"]
 heartbeat:
   cadence: 5m
   output: silent-on-noop
@@ -14,128 +14,126 @@ heartbeat:
   only_if_quiet: false
 ---
 
-## Real-time Agent Monitor
+## Triage Waiting Agents
 
-*Requires: `fswatch` installed (`brew install fswatch`)*
+React to blocked and newly-completed bg agents surfaced by `orra_scan`. Each tick:
+call `orra_scan` → for each entry with `status: needs_attention` or `flags` including `blocked`
+→ `orra_inspect` to read the transcript tail / `detail` → handle it (or escalate to the human
+as ONE concise line), then write a condensed status summary to `.orra/memory/`.
 
-Watch agent state files in real-time and react to events immediately — don't wait for the user to ask "what's happening?".
+You are the first responder for agent state events — blocked agents should be triaged in
+seconds, completions surfaced immediately, and the human interrupted only for genuine decisions.
 
-### How This Directive Works
+### How Agent State Works (Agents View)
 
-You react to two kinds of signals:
+Agent state is daemon-backed. `orra_scan` returns a classified view joining the daemon roster
+(`$CLAUDE_CONFIG_DIR/jobs/*/state.json` + `daemon/roster.json`) with `git worktree list` and
+PR data. Key fields:
 
-1. **Push** (low-latency): `fswatch` notifies you when an agent state file changes. Use this for permission-request reactions where seconds matter.
-2. **Pull** (rich context): `orra_scan` returns each tracked agent's pre-computed `summary` field — `oneLine`, `needsAttentionScore`, `likelyStuckReason`, `lastTestResult`, `lastFileEdited`, `tailLines`. Use this for "what's the situation?" questions and stuck-detection without re-parsing logs yourself.
+- `agent.status` — `running` | `waiting` | `blocked` | `completed` | `failed` | `killed`
+- `agent.flags` — array; includes `"blocked"` when the agent is waiting for input
+- `agent.detail` — one-liner from the daemon: what the agent is doing or waiting on
+- `agent.daemonShort` — the short ID used by `claude attach`/`claude stop`/`claude rm`
 
-You almost never need to read raw `.orra/agents/<id>.log` files directly. The summary cache has done the parsing for you.
+For a deeper look at what the agent is waiting on, call `orra_inspect` on the worktree id —
+it reads the transcript `.jsonl` and surfaces the last few turns.
 
 ### On Session Start
 
-1. Check if `fswatch` is available: `which fswatch`
-   - Not found: fall back to periodic `/loop 2m orra_scan`. Tell the user: "Install `fswatch` (`brew install fswatch`) for real-time agent monitoring. Falling back to scanning every 2 minutes."
-   - Found: continue.
+1. Call `orra_scan` to load the current state of every tracked agent.
+2. For each entry with `flags` including `"blocked"` or `status === "waiting"`, immediately
+   run the **Blocked Agent** handling below.
+3. For entries with high `summary.needsAttentionScore` (≥ 60), surface them to the user.
+4. Remember each agent's current `status`, `agent.flags`, and `summary.likelyStuckReason` as
+   the baseline for delta-detection on subsequent ticks.
 
-2. Check if `.orra/agents/` exists. If not, skip Monitor setup — monitoring activates once the first agent is registered.
+### Blocked Agent Handling
 
-3. Run an initial `orra_scan` to load the current state of every tracked agent. For each entry, remember:
-   - `agent.status`
-   - `agent.pendingQuestion` presence
-   - `summary.needsAttentionScore` and `summary.likelyStuckReason` (so you can detect when they change later)
+When `orra_scan` shows an agent with `flags` including `"blocked"`:
 
-4. Use the Monitor tool to run:
-   ```bash
-   fswatch --event Updated --exclude '\.log$' --exclude '\.answer\.json$' --exclude 'self\.id$' .orra/agents/
-   ```
-   This watches agent state JSON files. Excludes log files (noisy — the summary already covers them), answer files (you write those, would loop), and self.id files (static).
+1. Read `agent.detail` for the one-liner reason.
+2. Call `orra_inspect({ target: "worktree", id: "<slug>" })` for the transcript tail.
+3. Classify the block:
 
-### Event Reactions
+**Routine pattern — answer non-interactively:**
+`claude --bg --resume <shortId> "<answer>"` (this mints a new daemon job row continuing the same conversation; no human needed):
+- "Should I run the tests?" → answer `"yes"`
+- "Which file should I edit?" when the answer is obvious from context
+- "Confirm you want me to commit?" → answer `"yes, commit"` after verifying it looks safe
+- Any yes/no gating question on a task you (Orra) spawned via `orra_spawn`
 
-When Monitor surfaces a file change, immediately call `orra_scan` (cheap — summaries are cached) and find the entry whose state changed. Compare against what you last knew about that agent.
+**Needs human judgment — escalate as ONE concise line:**
+`"feat-auth blocked: agent is asking whether to delete migration files — needs your call (claude attach abc1234f)"`
+- Destructive operations outside the agent's assigned scope
+- Architectural or design decisions
+- Anything involving credentials, external services, or irreversible actions
+- Any block where you're not confident of the right answer
 
-#### Permission Request (`agent.pendingQuestion` appeared)
+Surface the `claude attach <shortId>` command so the user can jump in immediately.
 
-Read `agent.pendingQuestion.tool` and `agent.pendingQuestion.input` to understand what the agent is requesting.
+### Agent Stuck Detection
 
-**Auto-approve these safe operations** — call `orra_unblock` with `allow: true` and a brief reason:
+The summary cache detects stuck patterns. Read `summary.likelyStuckReason`:
 
-- **Read, Glob, Grep**: always safe — read-only
-- **Bash read-only commands**: `git status`, `git log`, `git diff`, `git branch`, `ls`, `cat`, `head`, `tail`, `wc`, `npm test`, `npm run test`, `npx jest`, `npx vitest`, `tsc --noEmit`, `npm run build`, `npm run lint`
-- **Write/Edit**: only if the target file path is inside the agent's own worktree directory
-- **Agent**: spawning subagents inside the worktree
+- `"loop: same line repeats"` — the agent is spinning. Propose `orra_kill({ agent: "<short>", cleanup: false })` to stop and preserve the transcript, then inspect.
+- `"stuck on <errorPattern>"` — repeated errors. Call `orra_inspect` for context; spawn a fixer via `orra_spawn` if the pattern is clear (e.g. a dependency is missing).
+- `"no output for Nm"` — may be a long-running task or genuinely hung. Surface with `summary.detail` and offer to `claude attach <shortId>`.
 
-**Surface these risky operations to the user** — describe the request and ask them to decide:
+Do not act on stuck detection without confirming with the user — these are diagnoses.
 
-- **Bash destructive commands**: `rm`, `kill`, `git push`, `git reset --hard`, `git checkout .`, `git clean`, `docker`, `curl`, `wget`, or any network command
-- **Write/Edit outside the worktree**
-- **Bash with `sudo`**
-- **Anything not in the safe list** — when in doubt, surface it. A false "ask the user" costs seconds. A false "auto-approve" could cause damage.
+### Agent Completed
 
-After deciding, call `orra_unblock` with the decision and a one-line reason.
+When `status` transitions to `completed`:
 
-#### Agent Stuck (`summary.likelyStuckReason` became non-null)
+1. Read `summary.oneLine` and `summary.lastTestResult` — no need to re-parse the transcript.
+2. Call `orra_inspect` only if you need the full detail (PR state, conflict prediction).
+3. Surface: `"feat-billing completed — tests passing, last file: src/billing.ts."` Suggest review/PR/merge as appropriate.
+4. Write a one-liner to `.orra/memory/worktrees/<id>.md` under "Recent completions" (append, don't overwrite).
 
-The summary cache detects three kinds of stuck:
+### Agent Failed / Killed
 
-- `"loop: same line repeats in tail"` — the agent is in an output loop (same line ≥ 3× in the tail-20 window)
-- `"stuck on <errorPattern>"` — repeated error family (ENOENT, ECONNREFUSED, timeout, command_not_found, permission_denied, syntax_error)
-- `"no output for Nm"` — running for > 10 minutes with no log activity
+1. Read `summary.oneLine` and `summary.tailLines` for immediate context.
+2. If the agent was spawned by `orra_spawn` (check `orra_inspect` for provenance via `.orra/spawns/`): do NOT restart — a failed background agent usually means the task hit something outside its allowed scope. Surface once with the diagnosis.
+3. If it's a user-started interactive session: surface with diagnosis. Offer `orra_spawn` with a retry prompt if the failure reason is clear.
 
-For each, summarize the situation using `summary.oneLine` + `summary.tailLines` (last 20 log lines, already ANSI-stripped) and propose a concrete action:
+### Drift and PR State (Ongoing)
 
-- Loop → "the agent has been writing the same line for the last N updates — looks like it's not making progress. Want me to interrupt and inspect?"
-- Error pattern → "agent has been hitting <ENOENT> repeatedly. Probably needs a manual fix. Want me to call `orra_inspect` for context?"
-- No output for Nm → "no output for N minutes. Want me to inspect or restart?"
+On your normal scan cadence:
 
-Don't act unless the user agrees — these are diagnoses, not auto-fixes.
+- **Drift:** If a worktree branch is significantly behind main, call `orra_rebase`. Clean rebase → mention it. Conflicts predicted → surface the conflicting files.
+- **PR ready to land** (approved + CI green + mergeable): Notify the user with the PR link. Do not auto-merge.
 
-#### Agent Completed (`status` changed from `running` to `idle`)
+### Writing Status to Memory
 
-1. Read `summary.oneLine` and `summary.lastTestResult` for an immediate verdict — no need to re-parse the log.
-2. Call `orra_inspect` only if you need details beyond the summary (e.g. PR state, conflict prediction, full marker contents).
-3. Surface to the user: "X finished — last test run <passed|failed>, last file edited: <summary.lastFileEdited>." Suggest review/PR/merge as appropriate.
+After each triage pass, write a condensed status summary to `.orra/memory/worktrees/`. One file per recently-active worktree, one line per update:
 
-#### Agent Failed or Interrupted (`status` changed to `failed` or `interrupted`)
+```
+last_triage: <iso-timestamp>
+<shortId>: <status> — <summary.oneLine>
+```
 
-1. Read `summary.oneLine` and `summary.tailLines` for the immediate context.
-2. Note: `likelyStuckReason` will be **null** for failed/interrupted agents — that's by design (they're done, not currently stuck). Use `summary.tailLines` and `summary.lastTestResult` instead to diagnose.
-3. **Check `agent.agentPersona`.** If it's `"headless-spawn"` (an `auto-remediator`-spawned agent), do NOT attempt restart. A failed headless agent usually means the task hit something the safe `--allowed-tools` allowlist couldn't handle — restarting won't fix that. Surface it to the user with the diagnosis and the reason it was spawned, so they can decide whether to widen the allowlist, take it manually, or ignore it. The `auto-remediator` directive should also be aware via the next scan and stop re-spawning the same pattern.
-4. If it's an interactive/registered agent (not headless-spawn): attempt a single restart with the same task. If it interrupts again, stop retrying and surface to the user with your diagnosis from the tail.
-5. If failed (non-zero exit) on an interactive agent, surface immediately with diagnosis — don't restart.
+Keep it brief — this is a breadcrumb for `memory-recall`, not a log.
 
-#### High Attention Score (`summary.needsAttentionScore >= 60`)
+### What NOT to Do
 
-Even if no other event fired, a high score means the agent is in trouble — failed status, repeated errors, stuck patterns. Surface it to the user with the score and the reason.
-
-#### New Agent Registered (new state file appears)
-
-Read its state via `orra_scan`, note its task and worktree, and start tracking it. No action needed beyond awareness.
-
-### Ongoing (Not Event-Driven)
-
-These checks don't come from Monitor events — run them on your normal scan cadence:
-
-- **Drift**: If a worktree branch is behind main, call `orra_rebase`. Clean rebase → just mention it was handled. Conflicts predicted → surface with the conflicting files.
-- **PR ready to land** (approved + CI green + mergeable): Notify the user with the PR link, summary, and approval details. Do not auto-merge — just notify.
-
-### Key Principle
-
-You are not passively watching — you are the first responder. Permission requests should be resolved in seconds. Stuck agents should be diagnosed before the user notices. Completions should be surfaced immediately. The goal is zero dead time for agents.
-
-The pre-inspection cache does the heavy lifting (parsing, scoring, stuck-detection) so you don't have to. Read the structured `summary` fields from `orra_scan` and react — don't re-parse logs yourself.
+- Do not use `orra_unblock` — it no longer exists. Use `claude --bg --resume <shortId> "<answer>"` for routine answers, or `claude attach <shortId>` for human decisions.
+- Do not read raw `.orra/agents/<id>.json` or `.orra/agents/<id>.log` — those are from the old lifecycle and are not written anymore. Agent state comes from `orra_scan` (daemon-backed).
+- Do not shell out to `git worktree list` or `claude agents` directly — always go through `orra_scan` for the classified view.
 
 ## Heartbeat invocation
 
-When the dispatcher wakes this directive with `since=<timestamp>`, do NOT run a full `fswatch`-style sweep. Run a cheap time-windowed diff instead:
+When the dispatcher wakes this directive with `since=<timestamp>`:
 
-1. Call `orra_scan`. The scan is cheap — it reads pre-computed summaries from disk.
-2. For each tracked agent, look at its state file in `.orra/agents/<id>.json`. Treat any agent whose state file `mtime` is strictly after `since` as "touched this window"; ignore the rest. (The `since` value is the ISO timestamp passed by the dispatcher, or `armed_at` on the first tick.)
-3. For each touched agent, compare its current signals to what the previous tick knew. Specifically, surface transitions that happened since `since`:
-   - `status` changed from `running` to `idle` (completed), `failed`, or `interrupted`
-   - `agent.pendingQuestion` newly appeared (permission request — auto-approve safe operations via `orra_unblock` per the allowlist above, surface risky ones)
-   - `summary.likelyStuckReason` became non-null (newly stuck)
-   - `summary.needsAttentionScore` crossed 60 in this window
-4. Aggregate transitions into a short report. One line per agent, leading with `summary.oneLine` and the transition verb (e.g. `"feat-auth completed — tests passing"`, `"feat-billing newly blocked on Bash permission for rm"`).
+1. Call `orra_scan`. The scan is cheap — pre-computed summaries from the daemon state + disk cache.
+2. Find agents whose `agent.updatedAt` (or the daemon job's `updatedAt`) is strictly after `since`. These were touched in this window; ignore the rest.
+3. For each touched agent, surface only **transitions** since `since`:
+   - `flags` gained `"blocked"` → run the Blocked Agent triage loop above; if it's a routine pattern, answer via `claude --bg --resume`; otherwise emit ONE line with `claude attach <shortId>`.
+   - `status` changed to `completed` → emit `"<id> completed — <summary.oneLine>"`.
+   - `status` changed to `failed` → emit `"<id> failed — <summary.tailLines[-1]>"`.
+   - `summary.likelyStuckReason` became non-null → emit `"<id> stuck: <reason>"`.
+   - `summary.needsAttentionScore` crossed 60 → emit `"<id> attention score <score>: <oneLine>"`.
+4. Aggregate into a short bullet list. Omit agents with no transitions.
 
-**No-op condition:** if the scan finds zero agents whose state file was touched since `since`, OR every touched agent's signals are unchanged from what the previous tick would have observed (same status, same `pendingQuestion`, same `likelyStuckReason`, same attention bracket), return exactly the literal string `no-op` and nothing else. The dispatcher will suppress it.
+**No-op condition:** if zero agents were touched since `since`, OR every touched agent's signals are unchanged (same status, same flags, same `likelyStuckReason`, same attention bracket), return exactly the literal string `no-op` and nothing else.
 
-Do not run `fswatch`, do not re-parse raw log files, and do not emit the rich per-event narratives from the "Event Reactions" section above — those are for interactive, `fswatch`-driven reactions on a normal user turn. The heartbeat invocation is a deliberately thinner digest.
+Do not re-parse raw transcript files on heartbeat ticks. Do not re-emit the rich per-event narratives above — heartbeat output is a deliberately thinner digest.
