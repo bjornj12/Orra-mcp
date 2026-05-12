@@ -1,30 +1,90 @@
 import { z } from "zod";
-import type { AgentManager } from "../core/agent-manager.js";
-import { SafeWorktreeIdSchema, isSafeBranchName } from "../core/validation.js";
+import { stopSession, removeSession } from "../core/claude-cli.js";
+import { readJobs, configDir } from "../core/daemon-state.js";
+import { readSpawnLedger } from "../core/state.js";
+import { isSafeBranchName } from "../core/validation.js";
 import { ok, fail, toMcpContent } from "../core/envelope.js";
 
 export const orraKillSchema = z.object({
-  worktree: SafeWorktreeIdSchema.describe("Worktree ID"),
-  cleanup: z.boolean().default(true).describe("Remove worktree + delete branch"),
-  closePR: z.boolean().default(false).describe("Close associated PR if draft"),
+  agent: z.string().min(1).describe("Short id (8 hex chars), slug, or session name of the agent to stop."),
+  cleanup: z.boolean().optional().describe("When true, run `claude rm` (removes job + worktree); when false or omitted, run `claude stop` (keeps transcript)."),
 });
+// Note: the agent field is intentionally z.string().min(1) (not SafeWorktreeIdSchema) because
+// it accepts both 8-hex daemon short ids (e.g. "abcd1234") and slugs from the spawn ledger.
+// The handler resolves these to a known short id before any filesystem use.
 
-export async function handleOrraKill(manager: AgentManager, args: z.infer<typeof orraKillSchema>) {
+/**
+ * Resolve an agent identifier to its daemon short id.
+ *
+ * Accepts:
+ *  - An 8-hex-char short id that exists in the spawn ledger or daemon jobs
+ *  - A slug/name that matches a spawn-ledger entry's `slug` field
+ *  - A name that matches a live daemon job's `name` field
+ */
+async function resolveShortId(
+  projectRoot: string,
+  agent: string,
+): Promise<string | null> {
+  // Check spawn ledger by shortId or slug
+  const ledger = await readSpawnLedger(projectRoot);
+  const byShortId = ledger.find((e) => e.shortId === agent);
+  if (byShortId) return byShortId.shortId;
+
+  const bySlug = ledger.find((e) => e.slug === agent);
+  if (bySlug) return bySlug.shortId;
+
+  // Check live daemon jobs by name or daemonShort
+  const jobs = await readJobs(configDir());
+  const byJobName = jobs.find((j) => j.name === agent);
+  if (byJobName?.daemonShort) return byJobName.daemonShort;
+
+  const byDaemonShort = jobs.find((j) => j.daemonShort === agent);
+  if (byDaemonShort?.daemonShort) return byDaemonShort.daemonShort;
+
+  return null;
+}
+
+export async function handleOrraKill(
+  projectRoot: string,
+  args: z.infer<typeof orraKillSchema>,
+) {
   try {
-    const agent = await manager.getAgent(args.worktree);
-    const result = await manager.stopAgent(args.worktree, args.cleanup);
-    if (args.closePR && agent?.branch && isSafeBranchName(agent.branch)) {
-      try {
-        const { execFile } = await import("node:child_process");
-        const { promisify } = await import("node:util");
-        const execFileAsync = promisify(execFile);
-        // `--` separator ensures agent.branch is treated as a positional
-        // arg even if it happens to start with a dash after future schema
-        // changes. The isSafeBranchName check above is belt-and-suspenders.
-        await execFileAsync("gh", ["pr", "close", "--delete-branch", "--", agent.branch], { timeout: 10000 });
-      } catch {}
+    const shortId = await resolveShortId(projectRoot, args.agent);
+    if (!shortId) {
+      return toMcpContent(fail(`agent not found: ${args.agent}`, { code: "agent_not_found" }));
     }
-    return toMcpContent(ok(result));
+
+    const cleanup = args.cleanup ?? false;
+
+    if (cleanup) {
+      await removeSession(shortId);
+    } else {
+      await stopSession(shortId);
+    }
+
+    // PR cleanup: if the spawn ledger has a branch name, try to close the PR.
+    // This is best-effort — we don't fail the kill if gh is unavailable.
+    const ledger = await readSpawnLedger(projectRoot);
+    const entry = ledger.find((e) => e.shortId === shortId);
+    if (cleanup && entry) {
+      // The slug can be used as a branch hint; if the job had an explicit branch, use that.
+      // We look up the daemon job to see if there's a worktreeBranch.
+      const jobs = await readJobs(configDir());
+      const job = jobs.find((j) => j.daemonShort === shortId);
+      const branch = job?.worktreeBranch ?? null;
+      if (branch && isSafeBranchName(branch)) {
+        try {
+          const { execFile } = await import("node:child_process");
+          const { promisify } = await import("node:util");
+          const execFileAsync = promisify(execFile);
+          await execFileAsync("gh", ["pr", "close", "--delete-branch", "--", branch], { timeout: 10_000 });
+        } catch {
+          // gh not available or no PR — ignore
+        }
+      }
+    }
+
+    return toMcpContent(ok({ killed: true, shortId, cleaned: cleanup }));
   } catch (err) {
     return toMcpContent(fail(err instanceof Error ? err.message : String(err)));
   }

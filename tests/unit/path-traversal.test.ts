@@ -1,8 +1,15 @@
 /**
  * Regression tests ensuring that tool schemas reject path-traversal and
- * other unsafe worktree IDs *before* the handler can construct a filesystem
- * path. A prompt injection should never be able to trick a caller into
- * writing outside `.orra/agents/` via a crafted worktree parameter.
+ * other unsafe worktree / agent IDs *before* the handler can construct a
+ * filesystem path. A prompt injection should never be able to trick a caller
+ * into writing outside safe directories via crafted parameters.
+ *
+ * Notes on orra_kill:
+ *   The `agent` field accepts hex short ids (e.g. "abcd1234") and slugs from
+ *   the spawn ledger. The handler resolves these via a lookup table rather
+ *   than direct path construction, so path-traversal via the `agent` field
+ *   does not give filesystem access. Only empty strings are rejected at
+ *   the schema level; the handler returns agent_not_found for unknown ids.
  */
 import { describe, it, expect } from "vitest";
 import { orraKillSchema } from "../../src/tools/orra-kill.js";
@@ -26,20 +33,25 @@ const TRAVERSAL_ATTEMPTS = [
   "`id`",
 ];
 
-describe("orra_kill rejects path-traversal worktree values", () => {
-  for (const attempt of TRAVERSAL_ATTEMPTS) {
-    it(`rejects ${JSON.stringify(attempt)}`, () => {
-      expect(() => orraKillSchema.parse({ worktree: attempt })).toThrow();
-    });
-  }
+// orra_kill: agent field is z.string().min(1) — only empty string is rejected at schema.
+// Path-traversal strings are handled at handler level (unknown id → agent_not_found).
+describe("orra_kill schema — agent field", () => {
+  it("rejects empty string", () => {
+    expect(() => orraKillSchema.parse({ agent: "" })).toThrow();
+  });
 
-  it("accepts a normal worktree ID", () => {
+  it("accepts a hex short id", () => {
+    expect(() => orraKillSchema.parse({ agent: "abcd1234" })).not.toThrow();
+  });
+
+  it("accepts a normal slug", () => {
     expect(() =>
-      orraKillSchema.parse({ worktree: "feat-auth-a1b2" }),
+      orraKillSchema.parse({ agent: "feat-auth-a1b2" }),
     ).not.toThrow();
   });
 });
 
+// orra_rebase: worktree field uses SafeWorktreeIdSchema — full path-traversal rejection.
 describe("orra_rebase rejects path-traversal worktree values", () => {
   for (const attempt of TRAVERSAL_ATTEMPTS) {
     it(`rejects ${JSON.stringify(attempt)}`, () => {
