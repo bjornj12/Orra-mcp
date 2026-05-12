@@ -17,7 +17,7 @@
   ],
   "scripts": {
     "clean": "rm -rf dist",
-    "build": "npm run clean && tsc && mkdir -p dist/templates/directives dist/templates/memory && cp src/templates/orchestrator.md dist/templates/orchestrator.md && cp src/templates/directives/*.md dist/templates/directives/ && cp src/templates/memory/*.md dist/templates/memory/ && chmod +x dist/index.js dist/bin/setup.js dist/bin/session-start-hook.js dist/bin/orra-launch.js",
+    "build": "npm run clean && tsc && mkdir -p dist/templates/directives dist/templates/memory dist/templates/hooks && cp src/templates/orchestrator.md dist/templates/orchestrator.md && cp src/templates/directives/*.md dist/templates/directives/ && cp src/templates/memory/*.md dist/templates/memory/ && cp src/templates/hooks/*.sh dist/templates/hooks/ && chmod +x dist/templates/hooks/worktree-create.sh dist/index.js dist/bin/setup.js dist/bin/session-start-hook.js dist/bin/orra-launch.js",
     "dev": "tsc --watch",
     "test": "vitest run",
     "test:watch": "vitest",
