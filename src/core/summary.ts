@@ -40,8 +40,9 @@ export async function readLogTail(file: string): Promise<{ text: string; mtime: 
 }
 
 function buildOneLine(agent: AgentState, signals: LogSignals): string {
-  if (agent.pendingQuestion) {
-    return `awaiting permission: ${agent.pendingQuestion.tool}`;
+  // pendingQuestion removed from AgentState — blocked state surfaced via daemon "blocked" flag
+  if (agent.status === "waiting") {
+    return "agent is waiting (blocked on input)";
   }
   if (signals.lastTestResult === "fail") return "last test run failed";
   if (signals.lastTestResult === "pass") return "last test run passed";
@@ -56,10 +57,9 @@ function scoreSummary(
   now: Date,
 ): number {
   let score = 0;
-  if (agent.pendingQuestion) score += 50;
-  if (agent.status === "waiting") score += 40;
+  // "waiting" = daemon blocked state (previously pendingQuestion)
+  if (agent.status === "waiting") score += 50;
   if (agent.status === "failed") score += 40;
-  if (agent.status === "interrupted") score += 30;
   if (signals.lastTestResult === "fail") score += 20;
   if (signals.loopDetected) score += 15;
   if (signals.errorPattern) score += 15;
@@ -79,12 +79,13 @@ function deriveStuckReason(
   signals: LogSignals,
   now: Date,
 ): string | null {
-  if (agent.pendingQuestion) return `awaiting permission: ${agent.pendingQuestion.tool}`;
+  // "waiting" status = daemon blocked state
+  if (agent.status === "waiting") return "agent is waiting (blocked on input — use claude attach)";
   if (signals.loopDetected) return "loop: same line repeats in tail";
-  // "Stuck on X" only makes sense for an agent that's still trying. A failed,
-  // interrupted, or completed agent isn't stuck — it's done. The error pattern
-  // still contributes to needsAttentionScore via scoreSummary; we just don't
-  // label the agent as currently blocked by it.
+  // "Stuck on X" only makes sense for an agent that's still trying. A failed
+  // or completed agent isn't stuck — it's done. The error pattern still
+  // contributes to needsAttentionScore via scoreSummary; we just don't label
+  // the agent as currently blocked by it.
   if (signals.errorPattern && agent.status === "running") {
     return `stuck on ${signals.errorPattern}`;
   }

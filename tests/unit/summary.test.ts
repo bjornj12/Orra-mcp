@@ -16,17 +16,18 @@ let agentsDir: string;
 
 const fakeAgent: AgentState = {
   id: "agent-1",
+  sessionId: "192c325c-9d2f-4b11-bb54-ea933ddcb36b",
+  shortId: "192c325c",
   task: "do stuff",
   branch: "feature/x",
   worktree: "/tmp/wt",
-  pid: 99999,
   status: "running",
   agentPersona: null,
   model: null,
+  detail: null,
+  tempo: null,
   createdAt: "2026-04-13T09:00:00.000Z",
   updatedAt: "2026-04-13T09:30:00.000Z",
-  exitCode: null,
-  pendingQuestion: null,
 };
 
 beforeEach(async () => {
@@ -219,23 +220,22 @@ describe("getOrComputeSummary — bounded tail read", () => {
 });
 
 describe("getOrComputeSummary — scoring", () => {
-  it("scores ≥ 50 when pendingQuestion is set", async () => {
+  it("scores ≥ 50 when agent status is waiting (daemon blocked)", async () => {
     const logFile = path.join(agentsDir, "agent-1.log");
     await fs.writeFile(logFile, "waiting for approval");
 
-    const agentWithQ: AgentState = {
+    const waitingAgent: AgentState = {
       ...fakeAgent,
       status: "waiting",
-      pendingQuestion: { tool: "Bash", input: { command: "rm -rf /" } },
     };
 
-    const summary = await getOrComputeSummary("agent-1", agentWithQ, {
+    const summary = await getOrComputeSummary("agent-1", waitingAgent, {
       stateDir: agentsDir,
       now: () => new Date(),
     });
 
     expect(summary.needsAttentionScore).toBeGreaterThanOrEqual(50);
-    expect(summary.likelyStuckReason).toBe("awaiting permission: Bash");
+    expect(summary.likelyStuckReason).toContain("waiting");
   });
 
   it("scores higher when loopDetected and errorPattern both present", async () => {
@@ -257,8 +257,9 @@ describe("getOrComputeSummary — scoring", () => {
     const logFile = path.join(agentsDir, "agent-1.log");
     await fs.writeFile(logFile, "Tests: 3 passed\nDone.");
 
-    const idleAgent: AgentState = { ...fakeAgent, status: "idle" };
-    const summary = await getOrComputeSummary("agent-1", idleAgent, {
+    // "completed" status — no penalty factors
+    const completedAgent: AgentState = { ...fakeAgent, status: "completed" };
+    const summary = await getOrComputeSummary("agent-1", completedAgent, {
       stateDir: agentsDir,
       now: () => new Date(fakeAgent.updatedAt),
     });
@@ -300,7 +301,7 @@ describe("getOrComputeSummary — scoring", () => {
     });
 
     expect(summary.likelyStuckReason).toBeNull();
-    // Score still includes errorPattern (+15) and failed (+40) = 55
+    // Score includes errorPattern (+15) and failed (+40) = 55
     expect(summary.needsAttentionScore).toBeGreaterThanOrEqual(40);
   });
 
@@ -328,8 +329,7 @@ describe("getOrComputeSummary — scoring", () => {
 
     const worstAgent: AgentState = {
       ...fakeAgent,
-      status: "failed",
-      pendingQuestion: { tool: "Edit", input: {} },
+      status: "waiting", // highest scoring status
       updatedAt: "2026-04-13T09:00:00.000Z",
     };
 

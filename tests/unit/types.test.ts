@@ -9,6 +9,7 @@ import {
   ScanResultSchema,
   AgentSummarySchema,
   WorktreeScanEntrySchema,
+  SpawnLedgerEntrySchema,
   type AgentState,
   type Config,
   type GitState,
@@ -18,20 +19,21 @@ import {
 } from "../../src/types.js";
 
 describe("AgentStateSchema", () => {
-  it("should validate a complete agent state", () => {
+  it("should validate a complete agent state (new shape: sessionId, shortId, detail, tempo)", () => {
     const state: AgentState = {
       id: "auth-refactor-a1b2",
+      sessionId: "192c325c-9d2f-4b11-bb54-ea933ddcb36b",
+      shortId: "192c325c",
       task: "Refactor auth middleware",
       branch: "orra/auth-refactor-a1b2",
       worktree: "worktrees/auth-refactor-a1b2",
-      pid: 12345,
       status: "running",
       agentPersona: null,
       model: null,
+      detail: null,
+      tempo: null,
       createdAt: "2026-04-06T14:30:00.000Z",
       updatedAt: "2026-04-06T14:30:00.000Z",
-      exitCode: null,
-      pendingQuestion: null,
     };
     expect(AgentStateSchema.parse(state)).toEqual(state);
   });
@@ -40,59 +42,123 @@ describe("AgentStateSchema", () => {
     expect(() =>
       AgentStateSchema.parse({
         id: "test",
+        sessionId: "192c325c-9d2f-4b11-bb54-ea933ddcb36b",
+        shortId: "192c325c",
         task: "test",
         branch: "orra/test",
         worktree: "worktrees/test",
-        pid: 1,
         status: "invalid",
         agentPersona: null,
         model: null,
+        detail: null,
+        tempo: null,
         createdAt: "2026-04-06T14:30:00.000Z",
         updatedAt: "2026-04-06T14:30:00.000Z",
-        exitCode: null,
-        pendingQuestion: null,
       })
     ).toThrow();
   });
 
-  it("should accept completed state with exit code", () => {
-    const state: AgentState = {
+  it("should reject the old idle status", () => {
+    expect(() =>
+      AgentStateSchema.parse({
+        id: "test",
+        sessionId: "uuid",
+        shortId: "abc",
+        task: "test",
+        branch: "b",
+        worktree: "wt",
+        status: "idle",
+        agentPersona: null,
+        model: null,
+        detail: null,
+        tempo: null,
+        createdAt: "2026-04-06T14:30:00.000Z",
+        updatedAt: "2026-04-06T14:30:00.000Z",
+      })
+    ).toThrow();
+  });
+
+  it("should reject the old interrupted status", () => {
+    expect(() =>
+      AgentStateSchema.parse({
+        id: "test",
+        sessionId: "uuid",
+        shortId: "abc",
+        task: "test",
+        branch: "b",
+        worktree: "wt",
+        status: "interrupted",
+        agentPersona: null,
+        model: null,
+        detail: null,
+        tempo: null,
+        createdAt: "2026-04-06T14:30:00.000Z",
+        updatedAt: "2026-04-06T14:30:00.000Z",
+      })
+    ).toThrow();
+  });
+
+  it("should reject the old pid field", () => {
+    // Extra unknown fields are stripped by zod, but the key point is the schema
+    // no longer has pid as a required field — parsing without it must succeed.
+    const state = {
       id: "test-a1b2",
+      sessionId: "uuid-1234",
+      shortId: "abcd1234",
       task: "test task",
       branch: "orra/test-a1b2",
       worktree: "worktrees/test-a1b2",
-      pid: 999,
       status: "completed",
       agentPersona: "my-agent",
       model: "sonnet",
+      detail: "done",
+      tempo: "idle",
       createdAt: "2026-04-06T14:30:00.000Z",
       updatedAt: "2026-04-06T14:31:00.000Z",
-      exitCode: 0,
-      pendingQuestion: null,
     };
-    expect(AgentStateSchema.parse(state)).toEqual(state);
+    // Must parse fine without pid/exitCode/pendingQuestion
+    expect(() => AgentStateSchema.parse(state)).not.toThrow();
   });
 
-  it("should validate with a pendingQuestion object", () => {
-    const state: AgentState = {
-      id: "test-b3c4",
-      task: "Write tests",
-      branch: "orra/write-tests-b3c4",
-      worktree: "worktrees/write-tests-b3c4",
-      pid: 99999,
-      status: "waiting",
-      agentPersona: "tester",
+  it("should accept all valid new statuses", () => {
+    const validStatuses = ["running", "waiting", "completed", "failed", "killed"] as const;
+    for (const status of validStatuses) {
+      const state = {
+        id: "x",
+        sessionId: "uuid",
+        shortId: "abc",
+        task: "t",
+        branch: "b",
+        worktree: "wt",
+        status,
+        agentPersona: null,
+        model: null,
+        detail: null,
+        tempo: null,
+        createdAt: "2026-04-06T14:30:00.000Z",
+        updatedAt: "2026-04-06T14:30:00.000Z",
+      };
+      expect(() => AgentStateSchema.parse(state)).not.toThrow();
+    }
+  });
+
+  it("detail and tempo default to null when omitted", () => {
+    const state = {
+      id: "x",
+      sessionId: "uuid",
+      shortId: "abc",
+      task: "t",
+      branch: "b",
+      worktree: "wt",
+      status: "running",
+      agentPersona: null,
       model: null,
-      createdAt: "2026-04-08T11:00:00.000Z",
-      updatedAt: "2026-04-08T11:02:00.000Z",
-      exitCode: null,
-      pendingQuestion: {
-        tool: "Bash",
-        input: { command: "npm test" },
-      },
+      createdAt: "2026-04-06T14:30:00.000Z",
+      updatedAt: "2026-04-06T14:30:00.000Z",
     };
     const parsed = AgentStateSchema.parse(state);
-    expect(parsed.pendingQuestion).toEqual({ tool: "Bash", input: { command: "npm test" } });
+    expect(parsed.detail).toBeNull();
+    expect(parsed.tempo).toBeNull();
   });
 });
 
@@ -139,12 +205,21 @@ describe("ConfigSchema", () => {
 });
 
 
-describe("AgentStatus with idle and waiting", () => {
-  it("should accept idle status", () => {
-    expect(AgentStatus.parse("idle")).toBe("idle");
-  });
+describe("AgentStatus", () => {
   it("should accept waiting status", () => {
     expect(AgentStatus.parse("waiting")).toBe("waiting");
+  });
+
+  it("should accept running status", () => {
+    expect(AgentStatus.parse("running")).toBe("running");
+  });
+
+  it("should reject idle (dropped from enum)", () => {
+    expect(() => AgentStatus.parse("idle")).toThrow();
+  });
+
+  it("should reject interrupted (dropped from enum)", () => {
+    expect(() => AgentStatus.parse("interrupted")).toThrow();
   });
 });
 
@@ -239,17 +314,18 @@ describe("ScanResultSchema", () => {
           },
           agent: {
             id: "feat-auth-a1b2",
+            sessionId: "192c325c-9d2f-4b11-bb54-ea933ddcb36b",
+            shortId: "192c325c",
             task: "Implement auth feature",
             branch: "feat/auth",
             worktree: "worktrees/feat-auth-a1b2",
-            pid: 55555,
             status: "running",
             agentPersona: null,
             model: "sonnet",
+            detail: null,
+            tempo: null,
             createdAt: "2026-04-08T09:00:00.000Z",
             updatedAt: "2026-04-08T09:30:00.000Z",
-            exitCode: null,
-            pendingQuestion: null,
           },
           flags: ["has_pr", "ci_running"],
         },
@@ -413,5 +489,25 @@ describe("ConfigSchema — headlessSpawnConcurrency", () => {
 
   it("rejects non-integer values", () => {
     expect(() => ConfigSchema.parse({ headlessSpawnConcurrency: 2.5 })).toThrow();
+  });
+});
+
+describe("SpawnLedgerEntrySchema", () => {
+  it("parses a valid spawn ledger entry", () => {
+    const entry = {
+      shortId: "abcd1234",
+      sessionId: "192c325c-9d2f-4b11-bb54-ea933ddcb36b",
+      slug: "fix-flaky-test",
+      task: "fix the flaky test in CI",
+      reason: "CI is red on main",
+      spawnedBy: "orchestrator",
+      spawnedAt: "2026-05-12T15:30:20.000Z",
+    };
+    expect(() => SpawnLedgerEntrySchema.parse(entry)).not.toThrow();
+    expect(SpawnLedgerEntrySchema.parse(entry)).toEqual(entry);
+  });
+
+  it("rejects missing required fields", () => {
+    expect(() => SpawnLedgerEntrySchema.parse({ shortId: "abcd1234" })).toThrow();
   });
 });

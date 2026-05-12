@@ -5,7 +5,6 @@ import * as path from "node:path";
 import {
   type GitState,
   type AgentState,
-  AgentStateSchema,
   type PrState,
   type WorktreeStatus,
   type WorktreeScanEntry,
@@ -46,10 +45,7 @@ export function classify(
     return { status: "needs_attention", flags };
   }
 
-  // 1. Pending question
-  if (agent?.pendingQuestion != null) {
-    return { status: "needs_attention", flags };
-  }
+  // 1. (pendingQuestion removed — daemon state uses the "blocked" flag via Rule 0a)
 
   // 2. PR: changes_requested or CI failure
   if (pr != null) {
@@ -79,8 +75,8 @@ export function classify(
     return { status: "needs_attention", flags };
   }
 
-  // 5. Agent running or idle
-  if (agent != null && (agent.status === "running" || agent.status === "idle")) {
+  // 5. Agent running
+  if (agent != null && agent.status === "running") {
     return { status: "in_progress", flags };
   }
 
@@ -178,34 +174,6 @@ export async function scanMarkers(
     })
   );
   return found;
-}
-
-// ─── readAgentState ───────────────────────────────────────────────────────────
-
-function pidIsAlive(pid: number): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-export async function readAgentState(
-  projectRoot: string,
-  agentId: string
-): Promise<AgentState | null> {
-  const filePath = path.join(projectRoot, ".orra", "agents", `${agentId}.json`);
-  try {
-    const data = await fs.readFile(filePath, "utf-8");
-    const agent = AgentStateSchema.parse(JSON.parse(data));
-    if (agent.status === "running" && !pidIsAlive(agent.pid)) {
-      return { ...agent, status: "interrupted" };
-    }
-    return agent;
-  } catch {
-    return null;
-  }
 }
 
 // ─── enrichWithGitHub ─────────────────────────────────────────────────────────
